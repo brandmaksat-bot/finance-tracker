@@ -1,8 +1,9 @@
 <!doctype html>
 <!--
-  Трекер трат – мини-приложение Telegram.
-  Назначение: ввод трат и сводка недели и месяцев; данные хранит Code.gs в Google Таблице.
-  Внешние API (сверено 31.10.2026): Telegram Mini Apps – https://core.telegram.org/bots/webapps
+  Трекер – мини-приложение Telegram: траты и привычки.
+  Назначение: ввод трат, сводка недели и месяцев, ежедневные привычки с сериями;
+  данные хранит Code.gs в Google Таблице.
+  Внешние API (сверено 08.11.2026): Telegram Mini Apps – https://core.telegram.org/bots/webapps
   Адрес сервера передаётся параметром ?api= (его подставляет setup() в Code.gs).
   Без Telegram страница открывается в демо-режиме с тестовыми данными.
   Публикация: GitHub Pages, см. README.md.
@@ -11,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Траты</title>
+<title>Трекер</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -144,6 +145,27 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:14px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:calc(100% - 32px);text-align:center;z-index:40}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #toast.err{background:var(--bad);color:#fff}
+.hhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px}
+.hhead .h{margin:0}
+.hrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.hrow:first-child{border-top:0}
+.hcheck{flex:0 0 44px;height:44px;border-radius:14px;border:1.5px solid var(--line);display:inline-flex;align-items:center;justify-content:center;color:transparent;transition:background .15s,border-color .15s,color .15s,transform .08s}
+.hcheck svg{width:22px;height:22px}
+.hcheck.on{background:var(--ok);border-color:var(--ok);color:var(--card)}
+.hcheck:active{transform:scale(.94)}
+.hmain{flex:1;min-width:0}
+.hname{font-weight:500;overflow-wrap:anywhere}
+.hdots{display:flex;align-items:center;gap:4px;margin-top:6px}
+.hdots i{width:8px;height:8px;border-radius:50%;background:var(--sunk-press)}
+.hdots i.on{background:var(--ok)}
+.hdots i.cur{box-shadow:0 0 0 1.5px var(--card),0 0 0 3px var(--ink3)}
+.hdots .hrec{font-size:12px;color:var(--ink3);margin-left:6px;white-space:nowrap}
+.hstreak{text-align:right;white-space:nowrap}
+.hstreak b{display:block;font-size:22px;font-weight:600;line-height:1.1}
+.hstreak span{font-size:12px;color:var(--ink2)}
+.hstreak.zero b{color:var(--ink3)}
+.hdel{flex:0 0 28px;height:28px;margin-right:-6px;border-radius:50%;color:var(--ink3);display:inline-flex;align-items:center;justify-content:center}
+.hdel svg{width:14px;height:14px}
 .demo{font-size:12px;text-align:center;color:var(--ink3);margin:-4px 0 10px}
 .fatal{padding:40px 8px;text-align:center;color:var(--ink2)}
 [hidden]{display:none!important}
@@ -155,6 +177,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   <nav class="tabs" role="tablist">
     <button id="tab-add" class="on" role="tab">Ввод</button>
     <button id="tab-sum" role="tab">Сводка</button>
+    <button id="tab-hab" role="tab">Привычки</button>
   </nav>
 
   <section id="view-add">
@@ -235,6 +258,17 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       </div>
     </div>
   </section>
+  <section id="view-hab" hidden>
+    <div class="card">
+      <div class="hhead">
+        <h2 class="h">Привычки</h2>
+        <div class="seg" id="hab-day"><button data-d="0" class="on">Сегодня</button><button data-d="1">Вчера</button></div>
+      </div>
+      <div class="label num" id="hab-sub">&nbsp;</div>
+      <div id="hab-list" style="margin-top:6px"></div>
+      <button class="ghost" id="hab-add">Добавить привычку</button>
+    </div>
+  </section>
 </main>
 
 <div class="overlay" id="overlay" hidden>
@@ -264,6 +298,8 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   var KIND = {}; CATS.forEach(function (c) { KIND[c[0]] = c[1]; }); KIND['Без трат'] = 'none';
   var NOTE_REQ = { 'Другое': 1, 'Выходные': 1, 'Здоровье': 1, 'Непредвиденное': 1, 'С накоплений': 1 };
   var TAG = { weekend: 'выходные', reserve: 'непредвиденное', savings: 'с накоплений' };
+  var TAG_CAT = { 'Непредвиденное': 'упс' }; // чтобы метка не повторяла название категории
+  var HABIT_NAME_MAX = 40;
   var DAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
   var DAYS_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
   var MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -283,6 +319,8 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   var selDay = null;   // выбранный день недели в сводке
   var monthIdx = 0;    // 0 – текущий месяц, дальше – прошлые
   var noteOpen = false;
+  var sheetMode = 'note'; // окно ввода: 'note' – пояснение к трате, 'habit' – новая привычка
+  var habDay = 0;         // привычки: 0 – отмечаем сегодня, 1 – вчера
 
   function $(id) { return document.getElementById(id); }
   function fmt(n) { return Math.round(n).toLocaleString('ru-RU'); }
@@ -377,7 +415,8 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     }
   }
 
-  function send(action, payload, entry) {
+  // undo – откат локального изменения, если сервер вернул ошибку
+  function send(action, payload, undo) {
     if (DEMO) return;
     pending++;
     api(action, payload).then(function (data) {
@@ -385,7 +424,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       if (pending === 0) { S = data; saveCache(); render(); }
     }).catch(function (err) {
       pending--;
-      if (entry) { applyLocal(entry, action === 'add' ? -1 : 1); render(); }
+      if (undo) { undo(); render(); }
       toast(err.message, true); haptic('error');
     });
   }
@@ -419,11 +458,11 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     $('note').addEventListener('input', function () { F.note = this.value; });
     $('save').addEventListener('click', submit);
 
-    $('sheet-ok').addEventListener('click', confirmNote);
+    $('sheet-ok').addEventListener('click', confirmSheet);
     $('sheet-cancel').addEventListener('click', closeNote);
     $('overlay').addEventListener('click', function (ev) { if (ev.target === this) closeNote(); });
     $('sheet-input').addEventListener('input', function () { $('sheet-hint').textContent = ''; });
-    $('sheet-input').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); confirmNote(); } });
+    $('sheet-input').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); confirmSheet(); } });
     $('sheet-sugs').addEventListener('click', function (ev) {
       var b = ev.target.closest('.chip'); if (!b) return;
       $('sheet-input').value = b.getAttribute('data-note'); $('sheet-hint').textContent = ''; haptic('tap');
@@ -479,17 +518,34 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     var said = F.category + ', ' + fmt(a) + ' ₽' + (F.day === 'yesterday' ? ' (вчера)' : '');
     F.amount = ''; F.impulse = false; F.note = ''; F.day = 'today';
     render(); haptic('success'); toast('Записано: ' + said);
-    send('add', payload, entry);
+    send('add', payload, function () { applyLocal(entry, -1); });
   }
 
-  /* ---------- окно пояснения ---------- */
+  /* ---------- окно ввода: пояснение или новая привычка ---------- */
+  function setSheet(mode, title, sub, placeholder, okText, maxLen) {
+    sheetMode = mode;
+    $('sheet-title').textContent = title;
+    $('sheet-sub').textContent = sub;
+    $('sheet-input').placeholder = placeholder;
+    $('sheet-input').maxLength = maxLen;
+    $('sheet-ok').textContent = okText;
+    $('sheet-input').value = ''; $('sheet-hint').textContent = '';
+  }
   function openNote() {
     var a = parseInt(F.amount || '0', 10);
-    $('sheet-sub').textContent = F.category + ' · ' + fmt(a) + ' ₽' + (F.day === 'yesterday' ? ' · вчера' : '');
-    $('sheet-input').value = ''; $('sheet-hint').textContent = '';
+    setSheet('note', 'Пояснение', F.category + ' · ' + fmt(a) + ' ₽' + (F.day === 'yesterday' ? ' · вчера' : ''), 'На что потрачено', 'Записать', 200);
     var sugs = (S.suggestions && S.suggestions[F.category]) || [];
     $('sheet-sugs').innerHTML = sugs.map(function (s) { return '<button class="chip" data-note="' + esc(s) + '">' + esc(s) + '</button>'; }).join('');
     $('sheet-sugs').hidden = !sugs.length;
+    openSheet();
+  }
+  function openHabitSheet() {
+    if (!S || !S.habits) return;
+    setSheet('habit', 'Новая привычка', 'Отмечайте каждый день – трекер посчитает, сколько дней подряд', 'Например: зарядка, 20 страниц, без сладкого', 'Добавить', HABIT_NAME_MAX);
+    $('sheet-sugs').innerHTML = ''; $('sheet-sugs').hidden = true;
+    openSheet();
+  }
+  function openSheet() {
     var ov = $('overlay');
     noteOpen = true;
     ov.hidden = false;
@@ -504,9 +560,13 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     $('sheet-input').blur();
     setTimeout(function () { if (!noteOpen) ov.hidden = true; }, 230);
   }
-  function confirmNote() {
+  function sheetError(text) {
+    $('sheet-hint').textContent = text; haptic('error'); shake($('sheet-input')); $('sheet-input').focus();
+  }
+  function confirmSheet() {
+    if (sheetMode === 'habit') { confirmHabit(); return; }
     var v = $('sheet-input').value.trim();
-    if (!v) { $('sheet-hint').textContent = 'Напишите, на что потрачено'; haptic('error'); shake($('sheet-input')); $('sheet-input').focus(); return; }
+    if (!v) { sheetError('Напишите, на что потрачено'); return; }
     closeNote(); save(v);
   }
 
@@ -521,7 +581,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   function markNoSpend() {
     var entry = { id: 'tmp-' + Date.now(), kind: 'none', category: 'Без трат', amount: 0, date: S.today };
     applyLocal(entry, 1); render(); haptic('success'); toast('День отмечен без трат');
-    send('add', { category: 'Без трат', amount: 0, daysAgo: 0 }, entry);
+    send('add', { category: 'Без трат', amount: 0, daysAgo: 0 }, function () { applyLocal(entry, -1); });
   }
   function askDelete(id) {
     if (id.indexOf('tmp-') === 0) { toast('Запись ещё сохраняется, попробуйте через секунду'); return; }
@@ -532,7 +592,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       if (!ok) return;
       var entry = Object.assign({}, e);
       applyLocal(entry, -1); render(); toast('Удалено');
-      send('delete', { id: id }, entry);
+      send('delete', { id: id }, function () { applyLocal(entry, 1); });
     };
     if (tg && !DEMO && tg.isVersionAtLeast('6.2')) tg.showConfirm(text, go); else go(window.confirm(text));
   }
@@ -540,7 +600,8 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   /* ---------- отрисовка ---------- */
   function entryRow(e, opts) {
     opts = opts || {};
-    var tag = e.impulse ? '<span class="tag imp">импульс</span>' : (TAG[e.kind] ? '<span class="tag ' + e.kind + '">' + TAG[e.kind] + '</span>' : '');
+    var label = TAG_CAT[e.category] || TAG[e.kind];
+    var tag = e.impulse ? '<span class="tag imp">импульс</span>' : (label ? '<span class="tag ' + e.kind + '">' + label + '</span>' : '');
     var inner = '<span class="er">' +
       (opts.date ? '<span class="er-date">' + shortDate(e.date) + '</span>' : '') +
       '<span>' + esc(e.category) + tag + '</span>' +
@@ -558,7 +619,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 
   function render() {
     if (!S) return;
-    renderHero(); renderForm(); renderToday(); renderWeek(); renderMonth(false);
+    renderHero(); renderForm(); renderToday(); renderWeek(); renderMonth(false); renderHabits();
   }
 
   function renderHero() {
@@ -694,12 +755,121 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     }, { passive: true });
   }
 
+  /* ---------- привычки ---------- */
+  var CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  var CROSS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+  // Те же правила, что streak_ и bestStreak_ в Code.gs: пока сегодня не отмечено, серия считается до вчера.
+  function habStreak(dates, today) {
+    var set = {}; dates.forEach(function (d) { set[d] = 1; });
+    var d = set[today] ? today : addDays(today, -1), n = 0;
+    while (set[d]) { n++; d = addDays(d, -1); }
+    return n;
+  }
+  function habBest(dates) {
+    var best = 0, run = 0, prev = '';
+    dates.forEach(function (d) { run = prev && addDays(prev, 1) === d ? run + 1 : 1; if (run > best) best = run; prev = d; });
+    return best;
+  }
+  function findHabit(id) { return (S.habits || []).filter(function (h) { return h.id === id; })[0] || null; }
+  function setMark(h, date, done) {
+    var has = h.dates.indexOf(date) >= 0;
+    if (done && !has) { h.dates.push(date); h.dates.sort(); }
+    if (!done && has) h.dates = h.dates.filter(function (d) { return d !== date; });
+  }
+
+  function renderHabits() {
+    Array.prototype.forEach.call($('hab-day').children, function (b) { b.classList.toggle('on', Number(b.getAttribute('data-d')) === habDay); });
+    if (!S.habits) {
+      $('hab-sub').innerHTML = '&nbsp;';
+      $('hab-list').innerHTML = '<div class="empty">Загружаю привычки…</div>';
+      $('hab-add').hidden = true;
+      return;
+    }
+    $('hab-add').hidden = false;
+    var hs = S.habits, date = addDays(S.today, -habDay);
+    if (!hs.length) {
+      $('hab-sub').innerHTML = '&nbsp;';
+      $('hab-list').innerHTML = '<div class="empty">Пока нет привычек. Добавьте первую – например, зарядку или 20 страниц книги.</div>';
+      return;
+    }
+    var doneN = hs.filter(function (h) { return h.dates.indexOf(date) >= 0; }).length;
+    $('hab-sub').textContent = (habDay ? 'Вчера' : 'Сегодня') + ' сделано ' + doneN + ' из ' + hs.length;
+    $('hab-list').innerHTML = hs.map(function (h) {
+      var done = h.dates.indexOf(date) >= 0;
+      var streak = habStreak(h.dates, S.today), best = habBest(h.dates);
+      var dots = '';
+      for (var i = 6; i >= 0; i--) {
+        var d = addDays(S.today, -i), on = h.dates.indexOf(d) >= 0;
+        dots += '<i class="' + (on ? 'on' : '') + (d === date ? ' cur' : '') + '" title="' + shortDate(d) + (on ? ', сделано' : '') + '"></i>';
+      }
+      if (best > streak && best > 1) dots += '<span class="hrec num">рекорд ' + best + '</span>';
+      return '<div class="hrow">' +
+        '<button class="hcheck' + (done ? ' on' : '') + '" data-id="' + esc(h.id) + '" aria-pressed="' + done + '" aria-label="' + esc(h.name) + ': отметить за ' + (habDay ? 'вчера' : 'сегодня') + '">' + CHECK_SVG + '</button>' +
+        '<div class="hmain"><div class="hname">' + esc(h.name) + '</div><div class="hdots" aria-hidden="true">' + dots + '</div></div>' +
+        '<div class="hstreak' + (streak ? '' : ' zero') + '"><b class="num">' + streak + '</b><span>' + plural(streak, 'день', 'дня', 'дней') + ' подряд</span></div>' +
+        '<button class="hdel" data-del="' + esc(h.id) + '" aria-label="Убрать привычку ' + esc(h.name) + '">' + CROSS_SVG + '</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function toggleHabit(id) {
+    if (id.indexOf('tmp-') === 0) { toast('Привычка ещё сохраняется, попробуйте через секунду'); return; }
+    var h = findHabit(id); if (!h) return;
+    var daysAgo = habDay, date = addDays(S.today, -daysAgo);
+    var done = h.dates.indexOf(date) < 0;
+    setMark(h, date, done); renderHabits(); haptic(done ? 'success' : 'tap');
+    send('habitMark', { id: id, daysAgo: daysAgo, done: done }, function () { var x = findHabit(id); if (x) setMark(x, date, !done); });
+  }
+
+  function confirmHabit() {
+    var name = $('sheet-input').value.replace(/\s+/g, ' ').trim();
+    if (!name) { sheetError('Напишите название привычки'); return; }
+    var low = name.toLowerCase();
+    if (S.habits.some(function (h) { return h.name.toLowerCase() === low; })) { sheetError('Такая привычка уже есть'); return; }
+    if (S.habits.length >= 20) { sheetError('Не больше 20 привычек'); return; }
+    closeNote();
+    var id = 'tmp-' + Date.now();
+    S.habits.push({ id: id, name: name, created: S.today, dates: [] });
+    render(); haptic('success'); toast('Добавлено: ' + name);
+    send('habitAdd', { name: name }, function () { S.habits = S.habits.filter(function (h) { return h.id !== id; }); });
+  }
+
+  function askRemoveHabit(id) {
+    if (id.indexOf('tmp-') === 0) { toast('Привычка ещё сохраняется, попробуйте через секунду'); return; }
+    var h = findHabit(id); if (!h) return;
+    var text = 'Убрать привычку «' + h.name + '»? Отметки останутся в таблице.';
+    var go = function (ok) {
+      if (!ok) return;
+      var at = S.habits.indexOf(h);
+      S.habits.splice(at, 1); render(); toast('Привычка убрана');
+      send('habitRemove', { id: id }, function () { S.habits.splice(at, 0, h); });
+    };
+    if (tg && !DEMO && tg.isVersionAtLeast('6.2')) tg.showConfirm(text, go); else go(window.confirm(text));
+  }
+
+  function bindHabits() {
+    $('hab-list').addEventListener('click', function (ev) {
+      var c = ev.target.closest('.hcheck'); if (c) { toggleHabit(c.getAttribute('data-id')); return; }
+      var d = ev.target.closest('.hdel'); if (d) askRemoveHabit(d.getAttribute('data-del'));
+    });
+    $('hab-day').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b) return;
+      habDay = Number(b.getAttribute('data-d')); haptic('tap'); if (S) renderHabits();
+    });
+    $('hab-add').addEventListener('click', openHabitSheet);
+  }
+
   /* ---------- вкладки, уведомления ---------- */
+  var VIEWS = { add: ['view-add', 'tab-add'], summary: ['view-sum', 'tab-sum'], habits: ['view-hab', 'tab-hab'] };
   function show(view) {
-    var add = view !== 'summary';
-    $('view-add').hidden = !add; $('view-sum').hidden = add;
-    $('tab-add').classList.toggle('on', add); $('tab-sum').classList.toggle('on', !add);
-    if (!add && S) { selDay = S.dayIndex; monthIdx = 0; renderWeek(); renderMonth(false); }
+    if (!VIEWS[view]) view = 'add';
+    Object.keys(VIEWS).forEach(function (k) {
+      $(VIEWS[k][0]).hidden = k !== view;
+      $(VIEWS[k][1]).classList.toggle('on', k === view);
+    });
+    if (view === 'summary' && S) { selDay = S.dayIndex; monthIdx = 0; renderWeek(); renderMonth(false); }
+    if (view === 'habits' && S) { habDay = 0; renderHabits(); }
     window.scrollTo(0, 0);
   }
   var toastTimer;
@@ -767,8 +937,14 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       todayEntries: tDay.entries.map(function (e) { return Object.assign({}, e); }), todayMarkedNoSpend: tDay.noSpend,
       week: { living: living, impulse: impulse, weekend: weekend, left: 11000 - living, noSpendDays: dow > 2 ? 1 : 0, days: days },
       month: months[0], months: months,
-      suggestions: { 'Здоровье': ['аптека', 'анализы', 'стоматолог'], 'Выходные': ['кафе с семьёй', 'фастфуд на прогулке'], 'Другое': ['подарок коллеге'], 'С накоплений': ['не хватило до зарплаты'] }
+      suggestions: { 'Здоровье': ['аптека', 'анализы', 'стоматолог'], 'Выходные': ['кафе с семьёй', 'фастфуд на прогулке'], 'Другое': ['подарок коллеге'], 'С накоплений': ['не хватило до зарплаты'] },
+      habits: [
+        { id: 'h1', name: 'Зарядка', created: addDays(today, -60), dates: range(-12, -1).concat(range(-40, -21)).sort() },
+        { id: 'h2', name: 'Чтение 20 минут', created: addDays(today, -20), dates: range(-4, 0) },
+        { id: 'h3', name: 'Без сладкого', created: addDays(today, -10), dates: [addDays(today, -4), addDays(today, -3), addDays(today, -1)] }
+      ]
     };
+    function range(from, to) { var r = []; for (var j = from; j <= to; j++) r.push(addDays(today, j)); return r; }
   }
 
   /* ---------- запуск ---------- */
@@ -778,11 +954,13 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
     buildForm();
     bindSummary();
+    bindHabits();
     $('tab-add').addEventListener('click', function () { show('add'); });
     $('tab-sum').addEventListener('click', function () { show('summary'); });
+    $('tab-hab').addEventListener('click', function () { show('habits'); });
 
-    if (DEMO) { $('demo').hidden = false; S = demoState(); render(); show(qs.get('view') === 'summary' ? 'summary' : 'add'); return; }
-    show(qs.get('view') === 'summary' ? 'summary' : 'add');
+    if (DEMO) { $('demo').hidden = false; S = demoState(); render(); show(qs.get('view')); return; }
+    show(qs.get('view'));
     if (!/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(API)) {
       fatal('Не задан адрес сервера. Откройте трекер кнопкой в чате с ботом.'); return;
     }
