@@ -1,7 +1,8 @@
 <!doctype html>
 <!--
   Трекер – мини-приложение Telegram: траты и привычки.
-  Назначение: ввод трат, сводка недели и месяцев, ежедневные привычки с сериями;
+  Назначение: ввод трат и отметка привычек (вкладка «Ввод»), сводка недели, месяцев
+  и календарь привычек (вкладка «Сводка»);
   данные хранит Code.gs в Google Таблице.
   Внешние API (сверено 08.11.2026): Telegram Mini Apps – https://core.telegram.org/bots/webapps
   Адрес сервера передаётся параметром ?api= (его подставляет setup() в Code.gs).
@@ -145,27 +146,36 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:14px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:calc(100% - 32px);text-align:center;z-index:40}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #toast.err{background:var(--bad);color:#fff}
-.hhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px}
+.hhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:2px}
 .hhead .h{margin:0}
-.hrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.hctl{display:flex;align-items:center;gap:8px}
+.plus{width:36px;height:36px;border-radius:50%;background:var(--ink);color:var(--bg);display:inline-flex;align-items:center;justify-content:center;transition:transform .08s}
+.plus:active{transform:scale(.94)}
+.plus svg{width:18px;height:18px}
+.hrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line)}
 .hrow:first-child{border-top:0}
-.hcheck{flex:0 0 44px;height:44px;border-radius:14px;border:1.5px solid var(--line);display:inline-flex;align-items:center;justify-content:center;color:transparent;transition:background .15s,border-color .15s,color .15s,transform .08s}
-.hcheck svg{width:22px;height:22px}
+.hcheck{flex:0 0 36px;height:36px;border-radius:11px;border:1.5px solid var(--line);display:inline-flex;align-items:center;justify-content:center;color:transparent;transition:background .15s,border-color .15s,color .15s,transform .08s}
+.hcheck svg{width:19px;height:19px}
 .hcheck.on{background:var(--ok);border-color:var(--ok);color:var(--card)}
 .hcheck:active{transform:scale(.94)}
-.hmain{flex:1;min-width:0}
-.hname{font-weight:500;overflow-wrap:anywhere}
-.hdots{display:flex;align-items:center;gap:4px;margin-top:6px}
-.hdots i{width:8px;height:8px;border-radius:50%;background:var(--sunk-press)}
-.hdots i.on{background:var(--ok)}
-.hdots i.cur{box-shadow:0 0 0 1.5px var(--card),0 0 0 3px var(--ink3)}
-.hdots .hrec{font-size:12px;color:var(--ink3);margin-left:6px;white-space:nowrap}
-.hstreak{text-align:right;white-space:nowrap}
-.hstreak b{display:block;font-size:22px;font-weight:600;line-height:1.1}
-.hstreak span{font-size:12px;color:var(--ink2)}
-.hstreak.zero b{color:var(--ink3)}
-.hdel{flex:0 0 28px;height:28px;margin-right:-6px;border-radius:50%;color:var(--ink3);display:inline-flex;align-items:center;justify-content:center}
-.hdel svg{width:14px;height:14px}
+.hname{flex:1;min-width:0;font-weight:500;overflow-wrap:anywhere}
+.hs{white-space:nowrap;font-size:13px;color:var(--ink2)}
+.hs b{font-size:17px;font-weight:600;color:var(--ink);margin-right:3px}
+.hs.zero b{color:var(--ink3)}
+.hm{padding:12px 0 4px;border-top:1px solid var(--line)}
+.hm:first-child{border-top:0;padding-top:4px}
+.hm-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.hm-name{font-weight:600;text-align:left;overflow-wrap:anywhere}
+.hm-sub{font-size:13px;color:var(--ink2);margin-top:1px}
+.hgrid{display:grid;grid-template-columns:repeat(7,30px);gap:5px;margin:10px auto 4px;width:max-content}
+.hgrid span{font-size:10px;color:var(--ink3);text-align:center}
+.hgrid i{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--card)}
+.hgrid i.on{background:var(--ok);border-color:var(--ok)}
+.hgrid i.on svg{width:16px;height:16px}
+.hgrid i.off{border-style:dashed;opacity:.45}
+.hgrid i.cur{border-color:var(--ink3)}
+.hgrid i.on.cur{box-shadow:0 0 0 2px var(--card),0 0 0 3.5px var(--ink3)}
+.hgrid b{visibility:hidden}
 .demo{font-size:12px;text-align:center;color:var(--ink3);margin:-4px 0 10px}
 .fatal{padding:40px 8px;text-align:center;color:var(--ink2)}
 [hidden]{display:none!important}
@@ -177,7 +187,6 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   <nav class="tabs" role="tablist">
     <button id="tab-add" class="on" role="tab">Ввод</button>
     <button id="tab-sum" role="tab">Сводка</button>
-    <button id="tab-hab" role="tab">Привычки</button>
   </nav>
 
   <section id="view-add">
@@ -201,6 +210,16 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       <div class="hint" id="hint"></div>
     </div>
 
+    <div class="card" id="hab-card">
+      <div class="hhead">
+        <h2 class="h">Привычки</h2>
+        <div class="hctl">
+          <div class="seg" id="hab-day"><button data-d="0" class="on">Сегодня</button><button data-d="1">Вчера</button></div>
+          <button class="plus" id="hab-add" aria-label="Добавить привычку"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+      <div id="hab-list" style="margin-top:6px"></div>
+    </div>
     <div class="card">
       <div class="row-top"><span class="h" style="margin:0">Сегодня</span><span class="label num" id="today-sum"></span></div>
       <div id="today-list" style="margin-top:6px"></div>
@@ -242,6 +261,10 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
         </div>
       </div>
 
+      <div class="card" id="habm-card">
+        <div class="row-top"><h2 class="h" style="margin:0">Привычки</h2><span class="label" id="habm-label"></span></div>
+        <div id="habm" style="margin-top:8px"></div>
+      </div>
       <div class="card" id="noted-card">
         <h2 class="h">Пояснения</h2>
         <div id="noted"></div>
@@ -256,17 +279,6 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
         <h2 class="h">Что было в момент импульса</h2>
         <div id="notes"></div>
       </div>
-    </div>
-  </section>
-  <section id="view-hab" hidden>
-    <div class="card">
-      <div class="hhead">
-        <h2 class="h">Привычки</h2>
-        <div class="seg" id="hab-day"><button data-d="0" class="on">Сегодня</button><button data-d="1">Вчера</button></div>
-      </div>
-      <div class="label num" id="hab-sub">&nbsp;</div>
-      <div id="hab-list" style="margin-top:6px"></div>
-      <button class="ghost" id="hab-add">Добавить привычку</button>
     </div>
   </section>
 </main>
@@ -321,6 +333,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   var noteOpen = false;
   var sheetMode = 'note'; // окно ввода: 'note' – пояснение к трате, 'habit' – новая привычка
   var habDay = 0;         // привычки: 0 – отмечаем сегодня, 1 – вчера
+  var habErr = '';        // ошибка загрузки, если сервер не ответил
 
   function $(id) { return document.getElementById(id); }
   function fmt(n) { return Math.round(n).toLocaleString('ru-RU'); }
@@ -540,7 +553,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     openSheet();
   }
   function openHabitSheet() {
-    if (!S || !S.habits) return;
+    if (!S || !S.habits) { toast(habErr || 'Привычки ещё загружаются, попробуйте через секунду', !!habErr); return; }
     setSheet('habit', 'Новая привычка', 'Отмечайте каждый день – трекер посчитает, сколько дней подряд', 'Например: зарядка, 20 страниц, без сладкого', 'Добавить', HABIT_NAME_MAX);
     $('sheet-sugs').innerHTML = ''; $('sheet-sugs').hidden = true;
     openSheet();
@@ -727,6 +740,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 
     $('notes-card').hidden = !m.impulseNotes.length;
     $('notes').innerHTML = m.impulseNotes.map(function (e) { return entryRow(e, { date: true }); }).join('');
+    renderHabitMonth();
 
     if (animate) {
       var body = $('m-body'); body.classList.add('fade');
@@ -778,38 +792,54 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     if (!done && has) h.dates = h.dates.filter(function (d) { return d !== date; });
   }
 
+  function habLoading(el) {
+    el.innerHTML = '<div class="empty">' + esc(habErr ? 'Не удалось загрузить привычки: ' + habErr : 'Загружаю привычки…') + '</div>';
+  }
+
   function renderHabits() {
     Array.prototype.forEach.call($('hab-day').children, function (b) { b.classList.toggle('on', Number(b.getAttribute('data-d')) === habDay); });
-    if (!S.habits) {
-      $('hab-sub').innerHTML = '&nbsp;';
-      $('hab-list').innerHTML = '<div class="empty">Загружаю привычки…</div>';
-      $('hab-add').hidden = true;
-      return;
-    }
-    $('hab-add').hidden = false;
+    if (!S.habits) { habLoading($('hab-list')); return; }
     var hs = S.habits, date = addDays(S.today, -habDay);
-    if (!hs.length) {
-      $('hab-sub').innerHTML = '&nbsp;';
-      $('hab-list').innerHTML = '<div class="empty">Пока нет привычек. Добавьте первую – например, зарядку или 20 страниц книги.</div>';
-      return;
-    }
-    var doneN = hs.filter(function (h) { return h.dates.indexOf(date) >= 0; }).length;
-    $('hab-sub').textContent = (habDay ? 'Вчера' : 'Сегодня') + ' сделано ' + doneN + ' из ' + hs.length;
+    $('hab-day').hidden = !hs.length;
+    if (!hs.length) { $('hab-list').innerHTML = '<div class="empty">Добавьте первую привычку кнопкой «+» – например, зарядку или 20 страниц книги.</div>'; return; }
     $('hab-list').innerHTML = hs.map(function (h) {
-      var done = h.dates.indexOf(date) >= 0;
-      var streak = habStreak(h.dates, S.today), best = habBest(h.dates);
-      var dots = '';
-      for (var i = 6; i >= 0; i--) {
-        var d = addDays(S.today, -i), on = h.dates.indexOf(d) >= 0;
-        dots += '<i class="' + (on ? 'on' : '') + (d === date ? ' cur' : '') + '" title="' + shortDate(d) + (on ? ', сделано' : '') + '"></i>';
-      }
-      if (best > streak && best > 1) dots += '<span class="hrec num">рекорд ' + best + '</span>';
+      var done = h.dates.indexOf(date) >= 0, streak = habStreak(h.dates, S.today);
       return '<div class="hrow">' +
         '<button class="hcheck' + (done ? ' on' : '') + '" data-id="' + esc(h.id) + '" aria-pressed="' + done + '" aria-label="' + esc(h.name) + ': отметить за ' + (habDay ? 'вчера' : 'сегодня') + '">' + CHECK_SVG + '</button>' +
-        '<div class="hmain"><div class="hname">' + esc(h.name) + '</div><div class="hdots" aria-hidden="true">' + dots + '</div></div>' +
-        '<div class="hstreak' + (streak ? '' : ' zero') + '"><b class="num">' + streak + '</b><span>' + plural(streak, 'день', 'дня', 'дней') + ' подряд</span></div>' +
-        '<button class="hdel" data-del="' + esc(h.id) + '" aria-label="Убрать привычку ' + esc(h.name) + '">' + CROSS_SVG + '</button>' +
+        '<span class="hname">' + esc(h.name) + '</span>' +
+        '<span class="hs num' + (streak ? '' : ' zero') + '"><b>' + streak + '</b>' + plural(streak, 'день', 'дня', 'дней') + ' подряд</span>' +
         '</div>';
+    }).join('');
+  }
+
+  // Сводка: календарь выбранного месяца по каждой привычке
+  function renderHabitMonth() {
+    var card = $('habm-card');
+    if (!S.habits) { card.hidden = false; $('habm-label').textContent = ''; habLoading($('habm')); return; }
+    card.hidden = !S.habits.length;
+    if (!S.habits.length) return;
+    var m = S.months[monthIdx], key = m.key;
+    var y = Number(key.slice(0, 4)), mo = Number(key.slice(5, 7));
+    var dim = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    var first = key + '-01', lead = (new Date(first + 'T00:00:00Z').getUTCDay() + 6) % 7;
+    $('habm-label').textContent = cap(m.label);
+    $('habm').innerHTML = S.habits.map(function (h) {
+      var cells = DAYS.map(function (d) { return '<span>' + d + '</span>'; }).join('');
+      for (var k = 0; k < lead; k++) cells += '<b></b>';
+      var done = 0, possible = 0;
+      for (var dd = 1; dd <= dim; dd++) {
+        var date = key + '-' + (dd < 10 ? '0' : '') + dd;
+        var on = h.dates.indexOf(date) >= 0;
+        var off = date > S.today || date < h.created;
+        if (on) done++;
+        if (!off) possible++;
+        cells += '<i class="' + (on ? 'on' : (off ? 'off' : '')) + (date === S.today ? ' cur' : '') + '" title="' + shortDate(date) + (on ? ', сделано' : '') + '">' + (on ? CHECK_SVG : '') + '</i>';
+      }
+      var streak = habStreak(h.dates, S.today), best = habBest(h.dates);
+      var sub = streak + ' ' + plural(streak, 'день', 'дня', 'дней') + ' подряд' + (best > streak && best > 1 ? ' · рекорд ' + best : '');
+      return '<div class="hm"><div class="hm-top"><button class="hm-name" data-del="' + esc(h.id) + '" aria-label="' + esc(h.name) + ': убрать привычку">' + esc(h.name) + '</button>' +
+        '<span class="label num">' + (possible ? done + ' из ' + possible : '–') + '</span></div>' +
+        '<div class="hm-sub num">' + sub + '</div><div class="hgrid" aria-hidden="true">' + cells + '</div></div>';
     }).join('');
   }
 
@@ -818,7 +848,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     var h = findHabit(id); if (!h) return;
     var daysAgo = habDay, date = addDays(S.today, -daysAgo);
     var done = h.dates.indexOf(date) < 0;
-    setMark(h, date, done); renderHabits(); haptic(done ? 'success' : 'tap');
+    setMark(h, date, done); renderHabits(); renderHabitMonth(); haptic(done ? 'success' : 'tap');
     send('habitMark', { id: id, daysAgo: daysAgo, done: done }, function () { var x = findHabit(id); if (x) setMark(x, date, !done); });
   }
 
@@ -850,8 +880,10 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 
   function bindHabits() {
     $('hab-list').addEventListener('click', function (ev) {
-      var c = ev.target.closest('.hcheck'); if (c) { toggleHabit(c.getAttribute('data-id')); return; }
-      var d = ev.target.closest('.hdel'); if (d) askRemoveHabit(d.getAttribute('data-del'));
+      var c = ev.target.closest('.hcheck'); if (c) toggleHabit(c.getAttribute('data-id'));
+    });
+    $('habm').addEventListener('click', function (ev) {
+      var d = ev.target.closest('.hm-name'); if (d) askRemoveHabit(d.getAttribute('data-del'));
     });
     $('hab-day').addEventListener('click', function (ev) {
       var b = ev.target.closest('button'); if (!b) return;
@@ -861,7 +893,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   }
 
   /* ---------- вкладки, уведомления ---------- */
-  var VIEWS = { add: ['view-add', 'tab-add'], summary: ['view-sum', 'tab-sum'], habits: ['view-hab', 'tab-hab'] };
+  var VIEWS = { add: ['view-add', 'tab-add'], summary: ['view-sum', 'tab-sum'] };
   function show(view) {
     if (!VIEWS[view]) view = 'add';
     Object.keys(VIEWS).forEach(function (k) {
@@ -869,7 +901,6 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       $(VIEWS[k][1]).classList.toggle('on', k === view);
     });
     if (view === 'summary' && S) { selDay = S.dayIndex; monthIdx = 0; renderWeek(); renderMonth(false); }
-    if (view === 'habits' && S) { habDay = 0; renderHabits(); }
     window.scrollTo(0, 0);
   }
   var toastTimer;
@@ -957,7 +988,6 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     bindHabits();
     $('tab-add').addEventListener('click', function () { show('add'); });
     $('tab-sum').addEventListener('click', function () { show('summary'); });
-    $('tab-hab').addEventListener('click', function () { show('habits'); });
 
     if (DEMO) { $('demo').hidden = false; S = demoState(); render(); show(qs.get('view')); return; }
     show(qs.get('view'));
@@ -969,7 +999,8 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     api('state').then(function (data) {
       if (pending === 0) { S = data; saveCache(); render(); }
     }).catch(function (err) {
-      if (S) toast(err.message, true); else fatal(err.message);
+      habErr = err.message;
+      if (S) { toast(err.message, true); render(); } else fatal(err.message);
     });
   }
 
