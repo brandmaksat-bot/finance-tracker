@@ -162,9 +162,12 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 .hs{white-space:nowrap;font-size:13px;color:var(--ink2)}
 .hs b{font-size:17px;font-weight:600;color:var(--ink);margin-right:3px}
 .hs.zero b{color:var(--ink3)}
-.hm{padding:12px 0 4px;border-top:1px solid var(--line)}
-.hm:first-child{border-top:0;padding-top:4px}
-.hm-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.hnav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.hnav-mid{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px}
+.hnav .hm-name{text-align:center}
+.hm{transition:opacity .18s}
+.hm.fade{opacity:.25}
+.hm .hm-sub{text-align:center;margin-top:4px}
 .hm-name{font-weight:600;text-align:left;overflow-wrap:anywhere}
 .hm-sub{font-size:13px;color:var(--ink2);margin-top:1px}
 .hgrid{display:grid;grid-template-columns:repeat(7,30px);gap:5px;margin:10px auto 4px;width:max-content}
@@ -263,7 +266,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 
       <div class="card" id="habm-card">
         <div class="row-top"><h2 class="h" style="margin:0">Привычки</h2><span class="label" id="habm-label"></span></div>
-        <div id="habm" style="margin-top:8px"></div>
+        <div id="habm"></div>
       </div>
       <div class="card" id="noted-card">
         <h2 class="h">Пояснения</h2>
@@ -308,7 +311,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     ['Непредвиденное', 'reserve'], ['С накоплений', 'savings']
   ];
   var KIND = {}; CATS.forEach(function (c) { KIND[c[0]] = c[1]; }); KIND['Без трат'] = 'none';
-  var NOTE_REQ = { 'Другое': 1, 'Выходные': 1, 'Здоровье': 1, 'Непредвиденное': 1, 'С накоплений': 1 };
+  var NOTE_REQ = { 'Себе': 1, 'Другое': 1, 'Выходные': 1, 'Здоровье': 1, 'Непредвиденное': 1, 'С накоплений': 1 };
   var TAG = { weekend: 'выходные', reserve: 'непредвиденное', savings: 'с накоплений' };
   var TAG_CAT = { 'Непредвиденное': 'упс' }; // чтобы метка не повторяла название категории
   var HABIT_NAME_MAX = 40;
@@ -334,6 +337,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   var sheetMode = 'note'; // окно ввода: 'note' – пояснение к трате, 'habit' – новая привычка
   var habDay = 0;         // привычки: 0 – отмечаем сегодня, 1 – вчера
   var habErr = '';        // ошибка загрузки, если сервер не ответил
+  var habIdx = 0;         // какая привычка открыта в «Сводке» (календари листаются по одному)
 
   function $(id) { return document.getElementById(id); }
   function fmt(n) { return Math.round(n).toLocaleString('ru-RU'); }
@@ -759,13 +763,18 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     $('days').addEventListener('click', function (ev) { var b = ev.target.closest('button'); if (b) pickDay(Number(b.getAttribute('data-i'))); });
     $('m-prev').addEventListener('click', function () { goMonth(1); });
     $('m-next').addEventListener('click', function () { goMonth(-1); });
-    var x0 = null, y0 = null;
-    $('months').addEventListener('touchstart', function (ev) { x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY; }, { passive: true });
+    // Свайп по карточке «Привычки» листает привычки, по остальной сводке – месяцы.
+    var x0 = null, y0 = null, onHab = false;
+    $('months').addEventListener('touchstart', function (ev) {
+      x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY;
+      onHab = !!ev.target.closest('#habm-card') && !!S && !!S.habits && S.habits.length > 1;
+    }, { passive: true });
     $('months').addEventListener('touchend', function (ev) {
       if (x0 === null) return;
       var dx = ev.changedTouches[0].clientX - x0, dy = ev.changedTouches[0].clientY - y0;
       x0 = null;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) goMonth(dx > 0 ? 1 : -1);
+      if (!(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5)) return;
+      if (onHab) goHabit(dx > 0 ? -1 : 1); else goMonth(dx > 0 ? 1 : -1);
     }, { passive: true });
   }
 
@@ -823,7 +832,10 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     var dim = new Date(Date.UTC(y, mo, 0)).getUTCDate();
     var first = key + '-01', lead = (new Date(first + 'T00:00:00Z').getUTCDay() + 6) % 7;
     $('habm-label').textContent = cap(m.label);
-    $('habm').innerHTML = S.habits.map(function (h) {
+    var n = S.habits.length;
+    if (habIdx > n - 1) habIdx = n - 1;
+    if (habIdx < 0) habIdx = 0;
+    $('habm').innerHTML = [S.habits[habIdx]].map(function (h) {
       var cells = DAYS.map(function (d) { return '<span>' + d + '</span>'; }).join('');
       for (var k = 0; k < lead; k++) cells += '<b></b>';
       var done = 0, possible = 0;
@@ -837,10 +849,23 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       }
       var streak = habStreak(h.dates, S.today), best = habBest(h.dates);
       var sub = streak + ' ' + plural(streak, 'день', 'дня', 'дней') + ' подряд' + (best > streak && best > 1 ? ' · рекорд ' + best : '');
-      return '<div class="hm"><div class="hm-top"><button class="hm-name" data-del="' + esc(h.id) + '" aria-label="' + esc(h.name) + ': убрать привычку">' + esc(h.name) + '</button>' +
-        '<span class="label num">' + (possible ? done + ' из ' + possible : '–') + '</span></div>' +
-        '<div class="hm-sub num">' + sub + '</div><div class="hgrid" aria-hidden="true">' + cells + '</div></div>';
+      var nav = function (step, hide, label, svg) { return '<button class="arrow" data-hstep="' + step + '" aria-label="' + label + '"' + (hide ? ' hidden' : '') + '>' + svg + '</button>'; };
+      return '<div class="hnav">' + nav(-1, habIdx === 0, 'Предыдущая привычка', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>') +
+        '<div class="hnav-mid"><button class="hm-name" data-del="' + esc(h.id) + '" aria-label="' + esc(h.name) + ': убрать привычку">' + esc(h.name) + '</button>' +
+        (n > 1 ? '<span class="label num">' + (habIdx + 1) + ' / ' + n + '</span>' : '') + '</div>' +
+        nav(1, habIdx >= n - 1, 'Следующая привычка', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>') + '</div>' +
+        '<div class="hm" id="hm-cur"><div class="hm-sub num">' + (possible ? done + ' из ' + possible + ' · ' : '') + sub + '</div>' +
+        '<div class="hgrid" aria-hidden="true">' + cells + '</div></div>';
     }).join('');
+  }
+
+  function goHabit(delta) {
+    if (!S || !S.habits) return;
+    var next = habIdx + delta;
+    if (next < 0 || next > S.habits.length - 1) return;
+    habIdx = next; haptic('tap'); renderHabitMonth();
+    var el = $('hm-cur'); el.classList.add('fade');
+    requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.remove('fade'); }); });
   }
 
   function toggleHabit(id) {
@@ -883,6 +908,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       var c = ev.target.closest('.hcheck'); if (c) toggleHabit(c.getAttribute('data-id'));
     });
     $('habm').addEventListener('click', function (ev) {
+      var st = ev.target.closest('[data-hstep]'); if (st) { goHabit(Number(st.getAttribute('data-hstep'))); return; }
       var d = ev.target.closest('.hm-name'); if (d) askRemoveHabit(d.getAttribute('data-del'));
     });
     $('hab-day').addEventListener('click', function (ev) {
@@ -968,7 +994,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       todayEntries: tDay.entries.map(function (e) { return Object.assign({}, e); }), todayMarkedNoSpend: tDay.noSpend,
       week: { living: living, impulse: impulse, weekend: weekend, left: 11000 - living, noSpendDays: dow > 2 ? 1 : 0, days: days },
       month: months[0], months: months,
-      suggestions: { 'Здоровье': ['аптека', 'анализы', 'стоматолог'], 'Выходные': ['кафе с семьёй', 'фастфуд на прогулке'], 'Другое': ['подарок коллеге'], 'С накоплений': ['не хватило до зарплаты'] },
+      suggestions: { 'Себе': ['книга', 'футболка'], 'Здоровье': ['аптека', 'анализы', 'стоматолог'], 'Выходные': ['кафе с семьёй', 'фастфуд на прогулке'], 'Другое': ['подарок коллеге'], 'С накоплений': ['не хватило до зарплаты'] },
       habits: [
         { id: 'h1', name: 'Зарядка', created: addDays(today, -60), dates: range(-12, -1).concat(range(-40, -21)).sort() },
         { id: 'h2', name: 'Чтение 20 минут', created: addDays(today, -20), dates: range(-4, 0) },
