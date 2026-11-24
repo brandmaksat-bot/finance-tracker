@@ -179,6 +179,21 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 .hgrid i.cur{border-color:var(--ink3)}
 .hgrid i.on.cur{box-shadow:0 0 0 2px var(--card),0 0 0 3.5px var(--ink3)}
 .hgrid b{visibility:hidden}
+.seg.day{margin:0 0 14px}
+.seg.day button{font-size:13px;padding:0 6px;white-space:nowrap}
+#hab-day{margin:10px 0 2px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:14px}
+.cal .wd{font-size:11px;color:var(--ink3);text-align:center;padding-bottom:2px}
+.cal button{height:46px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:16px;font-weight:500;color:var(--ink);transition:background .15s,color .15s}
+.cal button i{width:5px;height:5px;border-radius:50%;background:transparent}
+.cal button.has i{background:var(--ink2)}
+.cal button.cur{box-shadow:inset 0 0 0 1.5px var(--line)}
+.cal button.sel{background:var(--ink);color:var(--bg);box-shadow:none}
+.cal button.sel.has i{background:var(--bg)}
+.cal button:disabled{color:var(--ink3);opacity:.45;cursor:default}
+.cal-note{font-size:12px;color:var(--ink3);margin-top:10px;display:flex;align-items:center;gap:6px}
+.cal-note i{width:5px;height:5px;border-radius:50%;background:var(--ink2);flex:none}
+.sheet-actions .btn2.full{flex:1}
 .demo{font-size:12px;text-align:center;color:var(--ink3);margin:-4px 0 10px}
 .fatal{padding:40px 8px;text-align:center;color:var(--ink2)}
 [hidden]{display:none!important}
@@ -201,9 +216,9 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     </div>
 
     <div class="card">
+      <div class="seg wide day" id="day-seg"><button data-day="0" class="on">Сегодня</button><button data-day="1">Вчера</button><button data-day="other" class="other">Другой день</button></div>
       <div class="row-top amount-row">
         <div class="amount num zero" id="amount" aria-live="polite">0<small>₽</small></div>
-        <div class="seg" id="day-seg"><button data-day="today" class="on">Сегодня</button><button data-day="yesterday">Вчера</button></div>
       </div>
       <div class="chips" id="chips"></div>
       <div class="seg wide" id="intent"><button data-imp="0" class="on">Планировал</button><button data-imp="1" class="imp">Импульс</button></div>
@@ -217,10 +232,10 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       <div class="hhead">
         <h2 class="h">Привычки</h2>
         <div class="hctl">
-          <div class="seg" id="hab-day"><button data-d="0" class="on">Сегодня</button><button data-d="1">Вчера</button></div>
           <button class="plus" id="hab-add" aria-label="Добавить привычку"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
         </div>
       </div>
+      <div class="seg wide day" id="hab-day"><button data-day="0" class="on">Сегодня</button><button data-day="1">Вчера</button><button data-day="other" class="other">Другой день</button></div>
       <div id="hab-list" style="margin-top:6px"></div>
     </div>
     <div class="card">
@@ -299,6 +314,17 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     </div>
   </div>
 </div>
+<div class="overlay" id="cal-ov" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cal-title">
+    <h3 id="cal-title">Другой день</h3>
+    <div class="label num" id="cal-sub" style="margin-top:2px"></div>
+    <div class="cal num" id="cal"></div>
+    <div class="cal-note"><i></i><span id="cal-note"></span></div>
+    <div class="sheet-actions">
+      <button class="btn2 full" id="cal-cancel">Отмена</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -329,13 +355,16 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   var DEMO = !initData;
 
   var S = null;
-  var F = { amount: '', category: 'Продукты', impulse: false, note: '', day: 'today' };
+  var DAYS_BACK = 7;       // траты и отметки – за сегодня и до 7 дней назад (как DAYS_BACK в Code.gs)
+  var F = { amount: '', category: 'Продукты', impulse: false, note: '', date: '' }; // date: '' – сегодня, иначе ГГГГ-ММ-ДД
   var pending = 0;
   var selDay = null;   // выбранный день недели в сводке
   var monthIdx = 0;    // 0 – текущий месяц, дальше – прошлые
   var noteOpen = false;
   var sheetMode = 'note'; // окно ввода: 'note' – пояснение к трате, 'habit' – новая привычка
-  var habDay = 0;         // привычки: 0 – отмечаем сегодня, 1 – вчера
+  var habDate = '';       // привычки: за какой день отмечаем ('' – сегодня, иначе ГГГГ-ММ-ДД)
+  var calOpen = false;
+  var calMode = 'entry';  // календарь «Другой день»: 'entry' – для трат, 'habit' – для привычек
   var habErr = '';        // ошибка загрузки, если сервер не ответил
   var habIdx = 0;         // какая привычка открыта в «Сводке» (календари листаются по одному)
 
@@ -347,6 +376,19 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   function diffDays(a, b) { return Math.round((new Date(a + 'T00:00:00Z') - new Date(b + 'T00:00:00Z')) / 864e5); }
   function shortDate(ymd) { var d = ymd.split('-'); return Number(d[2]) + ' ' + MONTHS_SHORT[Number(d[1]) - 1]; }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function dow(ymd) { return (new Date(ymd + 'T00:00:00Z').getUTCDay() + 6) % 7; }
+  function pickedDate(v) { return v || S.today; }
+  function dayWord(d) { return d === S.today ? 'сегодня' : (d === addDays(S.today, -1) ? 'вчера' : shortDate(d)); }
+  // Переключатель «Сегодня | Вчера | Другой день»: на третьей кнопке – выбранная дата
+  function renderDaySeg(id, v) {
+    if (!S) return;
+    var d = pickedDate(v), which = d === S.today ? '0' : (d === addDays(S.today, -1) ? '1' : 'other');
+    Array.prototype.forEach.call($(id).children, function (b) {
+      var k = b.getAttribute('data-day');
+      b.classList.toggle('on', k === which);
+      if (k === 'other') b.textContent = which === 'other' ? shortDate(d) : 'Другой день';
+    });
+  }
   function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
   function haptic(kind) {
     try {
@@ -402,6 +444,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     if (k === 'none') {
       if (wi >= 0) S.week.days[wi].noSpend = sign > 0;
       if (e.date === S.today) S.todayMarkedNoSpend = sign > 0;
+      syncDate(e.date, wi, sign);
       return;
     }
     if (e.date === S.today) upsert(S.todayEntries, Object.assign({}, lite), sign);
@@ -430,6 +473,17 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       var list = (S.suggestions[e.category] || []).filter(function (x) { return x !== e.note; });
       list.unshift(e.note); S.suggestions[e.category] = list.slice(0, 4);
     }
+    syncDate(e.date, wi, sign);
+  }
+  // Даты с записями (кружочки в календаре). Старый ответ сервера без entryDates – берём из недели.
+  function entryDates() {
+    if (!S.entryDates) S.entryDates = S.week.days.filter(function (d) { return d.entries.length || d.noSpend; }).map(function (d) { return d.date; });
+    return S.entryDates;
+  }
+  function syncDate(date, wi, sign) {
+    var list = entryDates(), at = list.indexOf(date);
+    if (sign > 0) { if (at < 0) { list.push(date); list.sort(); } return; }
+    if (wi >= 0 && at >= 0 && !S.week.days[wi].entries.length && !S.week.days[wi].noSpend) list.splice(at, 1);
   }
 
   // undo – откат локального изменения, если сервер вернул ошибку
@@ -469,9 +523,17 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       F.impulse = b.getAttribute('data-imp') === '1'; haptic('tap'); renderForm();
     });
     $('day-seg').addEventListener('click', function (ev) {
-      var b = ev.target.closest('button'); if (!b) return;
-      F.day = b.getAttribute('data-day'); haptic('tap'); renderForm();
+      var b = ev.target.closest('button'); if (!b || !S) return;
+      var k = b.getAttribute('data-day');
+      if (k === 'other') { openCal('entry'); return; }
+      F.date = k === '1' ? addDays(S.today, -1) : ''; haptic('tap'); renderForm();
     });
+    $('cal').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b || b.disabled) return;
+      calPick(b.getAttribute('data-date'));
+    });
+    $('cal-cancel').addEventListener('click', closeCal);
+    $('cal-ov').addEventListener('click', function (ev) { if (ev.target === this) closeCal(); });
     $('note').addEventListener('input', function () { F.note = this.value; });
     $('save').addEventListener('click', submit);
 
@@ -488,6 +550,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 
     document.addEventListener('keydown', function (ev) {
       if (noteOpen) { if (ev.key === 'Escape') closeNote(); return; }
+      if (calOpen) { if (ev.key === 'Escape') closeCal(); return; }
       if (ev.target.tagName === 'INPUT' || $('view-add').hidden) return;
       if (/^[0-9]$/.test(ev.key)) press(ev.key);
       else if (ev.key === 'Backspace') press('⌫');
@@ -513,7 +576,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     Array.prototype.forEach.call($('intent').children, function (b) { b.classList.toggle('on', (b.getAttribute('data-imp') === '1') === F.impulse); });
     $('note').hidden = !(living && F.impulse && !NOTE_REQ[F.category]);
     $('note').value = F.note;
-    Array.prototype.forEach.call($('day-seg').children, function (b) { b.classList.toggle('on', b.getAttribute('data-day') === F.day); });
+    renderDaySeg('day-seg', F.date);
     var verb = F.category === 'С накоплений' ? 'Записать перевод' : 'Записать';
     $('save').textContent = a ? verb + ' ' + fmt(a) + ' ₽' : verb;
   }
@@ -529,11 +592,12 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   function save(note) {
     var a = parseInt(F.amount || '0', 10);
     var living = KIND[F.category] === 'living';
-    var payload = { category: F.category, amount: a, impulse: living && F.impulse, note: note, daysAgo: F.day === 'today' ? 0 : 1 };
-    var entry = Object.assign({ id: 'tmp-' + Date.now(), kind: KIND[F.category], date: addDays(S.today, -payload.daysAgo) }, payload);
+    var date = pickedDate(F.date);
+    var payload = { category: F.category, amount: a, impulse: living && F.impulse, note: note, date: date };
+    var entry = Object.assign({ id: 'tmp-' + Date.now(), kind: KIND[F.category] }, payload);
     applyLocal(entry, 1);
-    var said = F.category + ', ' + fmt(a) + ' ₽' + (F.day === 'yesterday' ? ' (вчера)' : '');
-    F.amount = ''; F.impulse = false; F.note = ''; F.day = 'today';
+    var said = F.category + ', ' + fmt(a) + ' ₽' + (date === S.today ? '' : ' (' + dayWord(date) + ')');
+    F.amount = ''; F.impulse = false; F.note = ''; F.date = '';
     render(); haptic('success'); toast('Записано: ' + said);
     send('add', payload, function () { applyLocal(entry, -1); });
   }
@@ -550,7 +614,8 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   }
   function openNote() {
     var a = parseInt(F.amount || '0', 10);
-    setSheet('note', 'Пояснение', F.category + ' · ' + fmt(a) + ' ₽' + (F.day === 'yesterday' ? ' · вчера' : ''), 'На что потрачено', 'Записать', 200);
+    var d = pickedDate(F.date);
+    setSheet('note', 'Пояснение', F.category + ' · ' + fmt(a) + ' ₽' + (d === S.today ? '' : ' · ' + dayWord(d)), 'На что потрачено', 'Записать', 200);
     var sugs = (S.suggestions && S.suggestions[F.category]) || [];
     $('sheet-sugs').innerHTML = sugs.map(function (s) { return '<button class="chip" data-note="' + esc(s) + '">' + esc(s) + '</button>'; }).join('');
     $('sheet-sugs').hidden = !sugs.length;
@@ -585,6 +650,43 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     var v = $('sheet-input').value.trim();
     if (!v) { sheetError('Напишите, на что потрачено'); return; }
     closeNote(); save(v);
+  }
+
+  /* ---------- календарь «Другой день» ---------- */
+  function openCal(mode) {
+    if (!S) return;
+    if (mode === 'habit' && !S.habits) return;
+    calMode = mode;
+    var today = S.today, from = addDays(today, -DAYS_BACK), cur = pickedDate(mode === 'entry' ? F.date : habDate);
+    var marks = {};
+    if (mode === 'entry') entryDates().forEach(function (d) { marks[d] = 1; });
+    else S.habits.forEach(function (h) { h.dates.forEach(function (d) { marks[d] = 1; }); });
+    var start = addDays(from, -dow(from)), end = addDays(today, 6 - dow(today));
+    var html = DAYS.map(function (d) { return '<span class="wd">' + d + '</span>'; }).join('');
+    for (var d = start; d <= end; d = addDays(d, 1)) {
+      var off = d < from || d > today;
+      html += '<button data-date="' + d + '" class="' + (marks[d] ? 'has' : '') + (d === cur ? ' sel' : '') + (d === today ? ' cur' : '') + '"' +
+        (off ? ' disabled' : '') + ' aria-label="' + shortDate(d) + (marks[d] ? ', есть записи' : '') + '"><span>' + Number(d.slice(8)) + '</span><i></i></button>';
+    }
+    $('cal').innerHTML = html;
+    var a = from.split('-'), b = today.split('-');
+    $('cal-sub').textContent = 'Можно выбрать с ' + (a[1] === b[1] ? Number(a[2]) : Number(a[2]) + ' ' + MONTHS_GEN[Number(a[1]) - 1]) +
+      ' по ' + Number(b[2]) + ' ' + MONTHS_GEN[Number(b[1]) - 1];
+    $('cal-note').textContent = mode === 'entry' ? 'есть записи трат или отметка «Без трат»' : 'есть отметки привычек';
+    var ov = $('cal-ov');
+    calOpen = true; ov.hidden = false;
+    requestAnimationFrame(function () { if (calOpen) ov.classList.add('show'); });
+    haptic('tap');
+  }
+  function closeCal() {
+    var ov = $('cal-ov');
+    calOpen = false; ov.classList.remove('show');
+    setTimeout(function () { if (!calOpen) ov.hidden = true; }, 230);
+  }
+  function calPick(date) {
+    var v = date === S.today ? '' : date;
+    closeCal(); haptic('tap');
+    if (calMode === 'entry') { F.date = v; renderForm(); } else { habDate = v; renderHabits(); }
   }
 
   /* ---------- удаление ---------- */
@@ -806,15 +908,15 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   }
 
   function renderHabits() {
-    Array.prototype.forEach.call($('hab-day').children, function (b) { b.classList.toggle('on', Number(b.getAttribute('data-d')) === habDay); });
+    renderDaySeg('hab-day', habDate);
     if (!S.habits) { habLoading($('hab-list')); return; }
-    var hs = S.habits, date = addDays(S.today, -habDay);
+    var hs = S.habits, date = pickedDate(habDate);
     $('hab-day').hidden = !hs.length;
     if (!hs.length) { $('hab-list').innerHTML = '<div class="empty">Добавьте первую привычку кнопкой «+» – например, зарядку или 20 страниц книги.</div>'; return; }
     $('hab-list').innerHTML = hs.map(function (h) {
       var done = h.dates.indexOf(date) >= 0, streak = habStreak(h.dates, S.today);
       return '<div class="hrow">' +
-        '<button class="hcheck' + (done ? ' on' : '') + '" data-id="' + esc(h.id) + '" aria-pressed="' + done + '" aria-label="' + esc(h.name) + ': отметить за ' + (habDay ? 'вчера' : 'сегодня') + '">' + CHECK_SVG + '</button>' +
+        '<button class="hcheck' + (done ? ' on' : '') + '" data-id="' + esc(h.id) + '" aria-pressed="' + done + '" aria-label="' + esc(h.name) + ': отметить за ' + dayWord(date) + '">' + CHECK_SVG + '</button>' +
         '<span class="hname">' + esc(h.name) + '</span>' +
         '<span class="hs num' + (streak ? '' : ' zero') + '"><b>' + streak + '</b>' + plural(streak, 'день', 'дня', 'дней') + ' подряд</span>' +
         '</div>';
@@ -871,10 +973,10 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   function toggleHabit(id) {
     if (id.indexOf('tmp-') === 0) { toast('Привычка ещё сохраняется, попробуйте через секунду'); return; }
     var h = findHabit(id); if (!h) return;
-    var daysAgo = habDay, date = addDays(S.today, -daysAgo);
+    var date = pickedDate(habDate);
     var done = h.dates.indexOf(date) < 0;
     setMark(h, date, done); renderHabits(); renderHabitMonth(); haptic(done ? 'success' : 'tap');
-    send('habitMark', { id: id, daysAgo: daysAgo, done: done }, function () { var x = findHabit(id); if (x) setMark(x, date, !done); });
+    send('habitMark', { id: id, date: date, done: done }, function () { var x = findHabit(id); if (x) setMark(x, date, !done); });
   }
 
   function confirmHabit() {
@@ -912,8 +1014,10 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       var d = ev.target.closest('.hm-name'); if (d) askRemoveHabit(d.getAttribute('data-del'));
     });
     $('hab-day').addEventListener('click', function (ev) {
-      var b = ev.target.closest('button'); if (!b) return;
-      habDay = Number(b.getAttribute('data-d')); haptic('tap'); if (S) renderHabits();
+      var b = ev.target.closest('button'); if (!b || !S) return;
+      var k = b.getAttribute('data-day');
+      if (k === 'other') { openCal('habit'); return; }
+      habDate = k === '1' ? addDays(S.today, -1) : ''; haptic('tap'); renderHabits();
     });
     $('hab-add').addEventListener('click', openHabitSheet);
   }
@@ -994,6 +1098,8 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       todayEntries: tDay.entries.map(function (e) { return Object.assign({}, e); }), todayMarkedNoSpend: tDay.noSpend,
       week: { living: living, impulse: impulse, weekend: weekend, left: 11000 - living, noSpendDays: dow > 2 ? 1 : 0, days: days },
       month: months[0], months: months,
+      entryDates: days.filter(function (d, i) { return i <= dow && (d.entries.length || d.noSpend); }).map(function (d) { return d.date; })
+        .concat([addDays(ws, -1), addDays(ws, -2), addDays(ws, -4), addDays(ws, -6)]).sort(),
       suggestions: { 'Себе': ['книга', 'футболка'], 'Здоровье': ['аптека', 'анализы', 'стоматолог'], 'Выходные': ['кафе с семьёй', 'фастфуд на прогулке'], 'Другое': ['подарок коллеге'], 'С накоплений': ['не хватило до зарплаты'] },
       habits: [
         { id: 'h1', name: 'Зарядка', created: addDays(today, -60), dates: range(-12, -1).concat(range(-40, -21)).sort() },
