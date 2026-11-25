@@ -2,7 +2,8 @@
 <!--
   Трекер – мини-приложение Telegram: траты и привычки.
   Назначение: ввод трат и отметка привычек (вкладка «Ввод»), сводка недели, месяцев
-  и календарь привычек (вкладка «Сводка»);
+  и календарь привычек (вкладка «Сводка»), занятия арабским с сюжетом (вкладка «Арабский»,
+  содержание сезона – arabic/season1.json, с 25.11.2026);
   данные хранит Code.gs в Google Таблице.
   Внешние API (сверено 08.11.2026): Telegram Mini Apps – https://core.telegram.org/bots/webapps
   Адрес сервера передаётся параметром ?api= (его подставляет setup() в Code.gs).
@@ -17,7 +18,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;600&family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#F4F2ED;--card:#FFFFFF;--sunk:#EDEAE3;--sunk-press:#E2DED5;
@@ -196,6 +197,80 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
 .sheet-actions .btn2.full{flex:1}
 .demo{font-size:12px;text-align:center;color:var(--ink3);margin:-4px 0 10px}
 .fatal{padding:40px 8px;text-align:center;color:var(--ink2)}
+/* ---------- Арабский ---------- */
+:root{--sys:#2C5DA8;--sys-soft:#E4ECF8;--sys-ink:#16315C;--gold:#9A6B12}
+html[data-theme="dark"]{--sys:#7FA8E6;--sys-soft:#16233A;--sys-ink:#CFE0FA;--gold:#E3B45A}
+.ar{font-family:"Noto Naskh Arabic","Geeza Pro","Arabic Typesetting",serif;direction:rtl;unicode-bidi:isolate}
+.sys{border:1.5px solid var(--sys);background:var(--card);box-shadow:0 0 0 4px var(--sys-soft)}
+.sys-h{font-size:12px;font-weight:600;letter-spacing:.14em;color:var(--sys);text-transform:uppercase}
+.sys-title{font-size:19px;font-weight:600;margin:4px 0 10px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.stat{background:var(--sunk);border-radius:12px;padding:8px 10px}
+.stat b{display:block;font-size:19px;font-weight:600}
+.stat span{font-size:12px;color:var(--ink2)}
+.rank{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--sys);color:var(--card);font-weight:700}
+.lvl{display:flex;align-items:center;gap:10px}
+.lvl .track{flex:1;margin-top:0}
+.lvl .fill{background:var(--sys)}
+.quest{list-style:none;margin:0;padding:0}
+.quest li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.quest li:first-child{border-top:0}
+.quest i{flex:0 0 20px;height:20px;border-radius:6px;border:1.5px solid var(--line);display:inline-flex;align-items:center;justify-content:center;color:var(--card);font-style:normal;font-size:13px}
+.quest li.ok i{background:var(--ok);border-color:var(--ok)}
+.quest li.warn span:first-of-type{color:var(--bad)}
+.quest span.q{flex:1}
+.quest span.n{font-size:13px;color:var(--ink2);white-space:nowrap}
+.btn-sys{width:100%;height:50px;margin-top:12px;border-radius:16px;background:var(--sys);color:#fff;font-size:16px;font-weight:600}
+.btn-sys:active{transform:scale(.98)}
+.btn-sys:disabled{opacity:.45}
+.clock{display:flex;gap:5px;margin:6px 0}
+.clock i{width:22px;height:8px;border-radius:4px;background:var(--sunk)}
+.clock i.on{background:var(--bad)}
+.clues{margin:0;padding-left:18px}
+.clues li{margin:4px 0}
+.map{width:100%;height:auto;display:block;margin-top:8px}
+.map text{font-size:10px;fill:var(--ink2);font-family:Onest,system-ui,sans-serif}
+.map .pl{fill:var(--sunk);stroke:var(--ink3);stroke-width:1}
+.map .pl.seen{fill:var(--ink2)}
+.map .pl.cur{fill:var(--sys);stroke:var(--sys)}
+.map .water{fill:var(--sys-soft)}
+.arov{position:fixed;inset:0;z-index:35;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.arov-in{max-width:480px;margin:0 auto;padding:14px 16px calc(28px + env(safe-area-inset-bottom))}
+.arov-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.arov-top .x{width:36px;height:36px;border-radius:50%;background:var(--sunk);font-size:20px;line-height:36px;text-align:center}
+.prog{flex:1;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.prog b{display:block;width:100%;height:100%;background:var(--sys);transform-origin:left center;transform:scaleX(0);transition:transform .3s}
+.big-ar{font-size:44px;line-height:1.5;text-align:center;margin:18px 0 6px}
+.mid-ar{font-size:26px;line-height:1.7}
+.sub-c{text-align:center;color:var(--ink2)}
+.opts{display:grid;gap:8px;margin-top:16px}
+.opt{min-height:50px;border-radius:14px;border:1px solid var(--line);background:var(--card);padding:10px 14px;text-align:left;font-size:16px}
+.opt.right{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.opt.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.opt:disabled{cursor:default}
+.ar-input{width:100%;height:58px;border-radius:14px;border:1px solid var(--line);background:var(--card);padding:0 14px;font-size:28px;text-align:center;outline:none;margin-top:16px}
+.ar-input:focus{border-color:var(--sys)}
+.fb{margin-top:12px;padding:12px 14px;border-radius:14px;font-size:15px}
+.fb.ok{background:var(--ok-soft);color:var(--ok)}
+.fb.bad{background:var(--bad-soft);color:var(--bad)}
+.fb .ar{font-size:24px}
+.rule p{margin:0 0 10px}
+.rule .ar{font-size:22px}
+.scene p{margin:0 0 12px;font-size:16px;line-height:1.55}
+.scene .read{background:var(--sunk);border-radius:14px;padding:12px 14px;margin:0 0 12px;text-align:center}
+.scene .read .ar{font-size:26px;line-height:1.7;display:block}
+.scene .read button{font-size:13px;color:var(--sys);margin-top:6px}
+.scene .say{border-left:3px solid var(--sys);padding-left:10px}
+.choice{display:block;width:100%;text-align:left;min-height:50px;border-radius:14px;border:1px solid var(--line);background:var(--card);padding:12px 14px;margin-top:8px;font-size:15px}
+.choice small{display:block;color:var(--ink3);font-size:12px;margin-top:2px}
+.die{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0}
+.die b{width:64px;height:64px;border-radius:16px;background:var(--sys);color:#fff;font-size:30px;display:flex;align-items:center;justify-content:center}
+.die span{font-size:15px;color:var(--ink2)}
+.res-ok{color:var(--ok);font-weight:600}
+.res-bad{color:var(--bad);font-weight:600}
+.reward{text-align:center;padding:26px 16px}
+.reward .sys-title{font-size:22px}
+.tip{font-size:13px;color:var(--ink2)}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -205,6 +280,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
   <nav class="tabs" role="tablist">
     <button id="tab-add" class="on" role="tab">Ввод</button>
     <button id="tab-sum" role="tab">Сводка</button>
+    <button id="tab-ar" role="tab">Арабский</button>
   </nav>
 
   <section id="view-add">
@@ -299,7 +375,19 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       </div>
     </div>
   </section>
+
+  <section id="view-ar" hidden>
+    <div id="ar-main"></div>
+  </section>
 </main>
+
+<div class="arov" id="ar-ov" hidden>
+  <div class="arov-in">
+    <div class="arov-top"><button class="x" id="ar-x" aria-label="Закрыть">&times;</button><div class="prog"><b id="ar-prog"></b></div></div>
+    <div class="label" id="ar-ov-title"></div>
+    <div id="ar-body" style="margin-top:8px"></div>
+  </div>
+</div>
 
 <div class="overlay" id="overlay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
@@ -1022,8 +1110,601 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     $('hab-add').addEventListener('click', openHabitSheet);
   }
 
+  /* ---------- Арабский (arabic/КОНЦЕПЦИЯ.md) ----------
+   * Содержание сезона – arabic/season1.json рядом со страницей; состояние – на сервере (arState).
+   * Слова проверяет страница, лесенку повторений и броски d20 ведёт сервер. */
+  var AR_SEASON_URL = 'arabic/season1.json';
+  var AR = null, ARC = null, arErr = '', arBusy = false;
+  var arQueue = [];
+  var arSess = null;
+  var AR_TIP_KEY = 'ft-ar-tip';
+
+  function arBare(s) {
+    return String(s || '').normalize('NFC')
+      .replace(/[ً-ٰٟـۖ-ۭ​-‏؜⁦-⁩]/g, '')
+      .replace(/ٱ/g, 'ا').replace(/\s+/g, ' ').trim();
+  }
+  // Мини-разметка содержания: [[арабский]] – арабский текст, **жирный**, перевод строки – абзац
+  function arMark(s) {
+    // арабские вставки без [[ ]] тоже изолируем, иначе направление письма переставит соседние слова
+    s = String(s || '').split(/(\[\[.+?\]\])/).map(function (part, i) {
+      return i % 2 ? part : part.replace(/[؀-ۿ]+(?:[ ؀-ۿ]*[؀-ۿ])?/g, '[[$&]]');
+    }).join('');
+    return esc(s).replace(/\[\[(.+?)\]\]/g, '<span class="ar">$1</span>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  }
+  function arParas(s) { return String(s || '').split(/\n+/).map(function (p) { return '<p>' + arMark(p) + '</p>'; }).join(''); }
+  function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  function arIndex(c) {
+    c.W = {}; c.words.forEach(function (w) { c.W[w.id] = w; });
+    c.R = {}; c.P = {};
+    c.rules.forEach(function (r) { c.R[r.id] = r; r.parts.forEach(function (p) { p.rule = r.id; c.P[p.id] = p; }); });
+    c.E = {}; c.episodes.forEach(function (e) { c.E[e.n] = e; });
+    c.unitOfScene = {}; c.units.forEach(function (u) { if (u.scene) c.unitOfScene[u.scene] = u.n; });
+    return c;
+  }
+  function arPayload(extra) { var p = { contentUnits: ARC ? ARC.units.length : 0 }; for (var k in extra) p[k] = extra[k]; return p; }
+  function arCall(action, payload) {
+    var pr = DEMO ? arDemo.call(action, arPayload(payload)) : api(action, arPayload(payload));
+    var wasDone = AR && AR.taskDone;
+    return pr.then(function (data) {
+      AR = data;
+      // задание выполнено – сервер отметил привычку «Арабский»; обновить привычки во «Вводе»
+      if (data.taskDone && AR && !wasDone && !DEMO && S) api('state').then(function (d) { if (pending === 0) { S = d; saveCache(); render(); } }).catch(function () {});
+      return data;
+    });
+  }
+  function arLoad() {
+    if (arBusy) return;
+    arBusy = true; arErr = '';
+    var pc = ARC ? Promise.resolve(ARC) : fetch(AR_SEASON_URL, { cache: 'no-cache' })
+      .then(function (r) { if (!r.ok) throw new Error('Не загрузился сезон (' + r.status + ')'); return r.json(); })
+      .then(arIndex);
+    pc.then(function (c) { ARC = c; return arCall('arState', {}); })
+      .then(function () { arRender(); })
+      .catch(function (e) { arErr = e.message; arRender(); })
+      .finally(function () { arBusy = false; });
+  }
+  // Отправки идут по очереди, чтобы поздний ответ сервера не затёр более свежее состояние
+  var arChain = Promise.resolve();
+  function arFlush() {
+    var p = arChain.then(function () {
+      if (!arQueue.length) return;
+      var items = arQueue.splice(0, arQueue.length);
+      return arCall('arAnswers', { items: items }).catch(function (e) { arQueue = items.concat(arQueue); throw e; });
+    });
+    arChain = p.catch(function () {});
+    return p;
+  }
+
+  /* --- сюжет: состояние восстанавливается из журнала решений --- */
+  function arFx(st, fx) {
+    if (!fx) return;
+    if (fx.rep) st.rep += fx.rep;
+    if (fx.clock) st.clock = Math.max(0, Math.min(6, st.clock + fx.clock));
+    (fx.set || []).forEach(function (f) { st.flags[f] = true; });
+    (fx.unset || []).forEach(function (f) { delete st.flags[f]; });
+    [].concat(fx.clue || []).forEach(function (c) { if (st.clues.indexOf(c) < 0) st.clues.push(c); });
+  }
+  function arStory() {
+    var st = { rep: 0, clock: 0, flags: {}, clues: [], cold: {}, coldPending: {}, played: {} };
+    if (!AR || !ARC) return st;
+    AR.story.forEach(function (r) {
+      if (r[1] === 'cold') {
+        var u = ARC.units[Number(r[2]) - 1], sc = u && ARC.scenes[u.scene];
+        if (sc && !st.cold[sc.ep]) { st.cold[sc.ep] = true; st.coldPending[sc.ep] = true; var ep = ARC.E[sc.ep]; if (ep && ep.cold) arFx(st, ep.cold.fx); }
+        return;
+      }
+      var sc2 = ARC.scenes[r[1]];
+      if (!sc2) return;
+      var ch = (sc2.choices || []).filter(function (c) { return c.id === r[2]; })[0];
+      var out = ch ? (ch.check ? (r[6] ? ch.ok : ch.fail) : ch.then) : null;
+      st.played[r[1]] = { choice: r[2], roll: r[3], mod: r[4], dc: r[5], ok: r[6] };
+      delete st.coldPending[sc2.ep];
+      if (out) arFx(st, out.fx);
+      if (sc2.fx) arFx(st, sc2.fx);
+    });
+    return st;
+  }
+  // Условие: "флаг", "!флаг", "rep>=3", "clock>=4", "cold", "clue:id"; «и» – через &, «или» – через |
+  function arIf(cond, st, ep) {
+    if (!cond) return true;
+    return String(cond).split('|').some(function (alt) { return arIfAll(alt, st, ep); });
+  }
+  function arIfAll(cond, st, ep) {
+    return String(cond).split('&').every(function (c) {
+      c = c.trim();
+      var neg = c.charAt(0) === '!'; if (neg) c = c.slice(1);
+      var v, m = /^(rep|clock)(>=|<=|>|<|=)(-?\d+)$/.exec(c);
+      if (m) {
+        var a = st[m[1]], b = Number(m[3]);
+        v = m[2] === '>=' ? a >= b : m[2] === '<=' ? a <= b : m[2] === '>' ? a > b : m[2] === '<' ? a < b : a === b;
+      } else if (c === 'cold') v = !!st.cold[ep];
+      else if (c.indexOf('clue:') === 0) v = st.clues.indexOf(c.slice(5)) >= 0;
+      else v = !!st.flags[c];
+      return neg ? !v : v;
+    });
+  }
+  function arUnitDate(n) {
+    var d = ''; AR.units.forEach(function (u) { if (u[0] === n && (!d || u[1] < d)) d = u[1]; }); return d;
+  }
+  function arNextScene(st) {
+    for (var i = 0; i < ARC.units.length; i++) {
+      var u = ARC.units[i];
+      if (!u.scene || st.played[u.scene]) continue;
+      var d = arUnitDate(u.n);
+      return { id: u.scene, unit: u.n, done: !!d, open: !!d && (d < AR.today || AR.taskDone) };
+    }
+    return null;
+  }
+
+  /* --- окно Системы --- */
+  function arQuest() {
+    var q = [];
+    if (AR.penalty.need) q.push({ t: 'Штрафная зона', n: Math.min(AR.penalty.done, AR.penalty.size) + ' / ' + AR.penalty.size, ok: AR.penalty.done >= AR.penalty.size, warn: true });
+    var total = AR.reviewsToday + AR.due.length;
+    q.push({ t: 'Повторения', n: total ? AR.reviewsToday + ' / ' + total : 'нет', ok: !AR.due.length });
+    var more = AR.nextUnit <= ARC.units.length;
+    var u = more ? ARC.units[AR.nextUnit - 1] : null;
+    var unitLine = !AR.newAllowed ? 'после повторений' : (more ? 'урок ' + AR.nextUnit : 'сезон пройден');
+    q.push({ t: 'Новые слова и правило', n: Math.min(AR.unitsToday, AR.need) + ' / ' + AR.need + (AR.unitsToday >= AR.need ? '' : ' · ' + unitLine), ok: AR.unitsToday >= AR.need || !more });
+    if (u && AR.newAllowed && AR.unitsToday < AR.need) q.push({ t: arUnitTitle(u), n: u.words.length + ' сл.', sub: true, ok: false });
+    return q;
+  }
+  function arUnitTitle(u) {
+    if (u.part) { var p = ARC.P[u.part]; return p ? ARC.R[p.rule].title + ': ' + p.title : 'Правило'; }
+    return 'Повторение правил';
+  }
+  function arRender() {
+    var box = $('ar-main');
+    if (!box) return;
+    if (arErr && !AR) { box.innerHTML = '<div class="card"><div class="empty">' + esc(arErr) + '</div><button class="ghost" id="ar-retry">Повторить</button></div>'; $('ar-retry').onclick = arLoad; return; }
+    if (!AR || !ARC) { box.innerHTML = '<div class="card"><div class="empty">Система загружается…</div></div>'; return; }
+    var st = arStory();
+    var L = AR.lvl, pct = Math.round((AR.xp - L.from) / Math.max(1, L.to - L.from) * 100);
+    var q = arQuest();
+    var html = '';
+    html += '<div class="card sys"><div class="sys-h">[ Система ]</div>';
+    html += '<div class="lvl" style="margin-top:8px"><span class="rank">' + esc(AR.rank) + '</span><span><b>Уровень ' + L.level + '</b> <span class="label num">' + AR.xp + ' / ' + L.to + ' опыта</span></span></div>';
+    html += '<div class="lvl" style="margin-top:8px"><div class="track"><div class="fill" style="transform:scaleX(' + (pct / 100) + ')"></div></div></div>';
+    html += '<div class="stats"><div class="stat"><b class="num">' + AR.known + '</b><span>слов в памяти</span></div>' +
+      '<div class="stat"><b class="num">' + (AR.mod >= 0 ? '+' : '') + AR.mod + '</b><span>к броску d20</span></div>' +
+      '<div class="stat"><b class="num">' + AR.streak + '</b><span>' + plural(AR.streak, 'день', 'дня', 'дней') + ' подряд</span></div></div>';
+    html += '</div>';
+
+    html += '<div class="card sys"><div class="sys-h">[ Ежедневное задание ]</div><div class="sys-title">' + (AR.taskDone ? 'Задание выполнено' : 'Подготовка шакирда') + '</div><ul class="quest">' +
+      q.map(function (x) {
+        return '<li class="' + (x.ok ? 'ok' : '') + (x.warn && !x.ok ? ' warn' : '') + '"' + (x.sub ? ' style="padding-left:30px;border-top:0;padding-top:0"' : '') + '>' +
+          (x.sub ? '' : '<i>' + (x.ok ? '✓' : '') + '</i>') + '<span class="q' + (x.sub ? ' label' : '') + '">' + esc(x.t) + '</span><span class="n num">' + esc(x.n) + '</span></li>';
+      }).join('') + '</ul>';
+    var canMore = AR.taskDone && AR.newAllowed && !AR.due.length && AR.nextUnit <= ARC.units.length;
+    if (!AR.taskDone) html += '<button class="btn-sys" id="ar-go">' + (AR.reviewsToday || AR.unitsToday || AR.penalty.done ? 'Продолжить' : 'Начать') + '</button>';
+    else if (canMore) html += '<button class="ghost" id="ar-go">Ещё урок</button>';
+    if (AR.penalty.need && !AR.taskDone) html += '<div class="tip" style="margin-top:8px">Вчера задание не выполнено. Сначала – штрафная зона.</div>';
+    html += '</div>';
+
+    var ns = arNextScene(st);
+    var ep = ns ? ARC.E[ARC.scenes[ns.id].ep] : null;
+    html += '<div class="card"><div class="row-top"><h2 class="h" style="margin:0">' + (ep ? 'Серия ' + ep.n + '. ' + esc(ep.title) : 'Сюжет') + '</h2><span class="label num">Репутация ' + st.rep + '</span></div>';
+    if (!ns) html += '<div class="empty" style="margin-top:8px">' + (AR.nextUnit > ARC.units.length ? 'Сцены этой части сезона пройдены. Продолжение – в следующей выкладке.' : 'Сцена откроется после урока.') + '</div>';
+    else if (ns.open) html += '<button class="btn-sys" id="ar-scene">Открыть сцену</button>';
+    else html += '<div class="empty" style="margin-top:8px">' + (ns.done ? 'Сцена откроется после ежедневного задания.' : 'Следующая сцена откроется после урока ' + ns.unit + '.') + '</div>';
+    if (ARC.season.clock) {
+      html += '<div style="margin-top:12px"><div class="label">' + esc(ARC.season.clock.name) + '</div><div class="clock">' +
+        [0, 1, 2, 3, 4, 5].map(function (i) { return '<i class="' + (i < st.clock ? 'on' : '') + '"></i>'; }).join('') + '</div>' +
+        (st.clock ? '<div class="tip">' + esc(ARC.season.clock.signs[st.clock - 1] || '') + '</div>' : '') + '</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="card"><h2 class="h">Карта слободы</h2>' + arMap(st, ns) + '</div>';
+    if (st.clues.length) html += '<div class="card"><h2 class="h">Улики</h2><ul class="clues">' + st.clues.map(function (c) { return '<li>' + arMark(ARC.clues[c] || c) + '</li>'; }).join('') + '</ul></div>';
+    if (AR.exam.available) html += '<div class="card sys"><div class="sys-h">[ Переоценка ]</div><div class="sys-title">Экзамен на ранг</div><div class="tip">30 заданий по всему пройденному. Ранг повышается при 80% и выше. Раз в месяц.</div><button class="btn-sys" id="ar-exam">Начать экзамен</button></div>';
+    var tipOff = false; try { tipOff = localStorage.getItem(AR_TIP_KEY) === '1'; } catch (e) {}
+    if (!tipOff) html += '<div class="card"><div class="tip">Для слов на письме нужна арабская раскладка: Настройки → Основные → Клавиатура → Клавиатуры → Новые клавиатуры → Арабская. Переключение – кнопкой с глобусом.</div><button class="ghost" id="ar-tip">Понятно</button></div>';
+    box.innerHTML = html;
+    if ($('ar-go')) $('ar-go').onclick = arStart;
+    if ($('ar-scene')) $('ar-scene').onclick = function () { arScene(ns.id); };
+    if ($('ar-exam')) $('ar-exam').onclick = arExam;
+    if ($('ar-tip')) $('ar-tip').onclick = function () { try { localStorage.setItem(AR_TIP_KEY, '1'); } catch (e) {} arRender(); };
+  }
+  function arMap(st, ns) {
+    var m = ARC.map; if (!m) return '';
+    var seen = {};
+    Object.keys(st.played).forEach(function (id) { var s = ARC.scenes[id]; if (s && s.place) seen[s.place] = true; });
+    var cur = ns ? ARC.scenes[ns.id].place : '';
+    var svg = '<svg class="map" viewBox="0 0 320 220" role="img" aria-label="Карта слободы">';
+    (m.water || []).forEach(function (w) { svg += '<path class="water" d="' + esc(w.d) + '"></path>'; });
+    (m.water || []).forEach(function (w) { if (w.label) svg += '<text x="' + w.lx + '" y="' + w.ly + '" font-style="italic">' + esc(w.label) + '</text>'; });
+    m.places.forEach(function (p) {
+      if (p.if && !arIf(p.if, st, 0) && !seen[p.id]) return;
+      var cls = 'pl' + (p.id === cur ? ' cur' : (seen[p.id] ? ' seen' : ''));
+      svg += '<circle class="' + cls + '" cx="' + p.x + '" cy="' + p.y + '" r="' + (p.id === cur ? 6 : 4.5) + '"></circle>' +
+        '<text x="' + (p.x + (p.lx || 8)) + '" y="' + (p.y + (p.ly || 3.5)) + '"' + (p.anchor ? ' text-anchor="' + p.anchor + '"' : '') + '>' + esc(p.name) + '</text>';
+    });
+    return svg + '</svg>';
+  }
+
+  /* --- оверлей занятия --- */
+  function arOpen(title) {
+    var ov = $('ar-ov'); ov.hidden = false; document.body.style.overflow = 'hidden';
+    $('ar-ov-title').textContent = title || '';
+    ov.scrollTop = 0;
+  }
+  function arClose() {
+    $('ar-ov').hidden = true; document.body.style.overflow = '';
+    arSess = null;
+    arFlush().catch(function (e) { toast(e.message, true); }).then(arRender);
+  }
+  function arProg(x) { $('ar-prog').style.transform = 'scaleX(' + Math.max(0, Math.min(1, x)) + ')'; }
+  function arBody(html) { $('ar-body').innerHTML = html; $('ar-ov').scrollTop = 0; }
+
+  function arIntroduced() { return Object.keys(AR.cards || {}); }
+  function arStart() {
+    if (!AR) return;
+    arOpen('Ежедневное задание');
+    if (AR.taskDone && AR.newAllowed && !AR.due.length && AR.nextUnit <= ARC.units.length) arUnit(ARC.units[AR.nextUnit - 1]);
+    else arStep();
+  }
+  // Следующий шаг задания – по свежему состоянию с сервера
+  function arStep() {
+    arProg(0);
+    if (AR.penalty.need && AR.penalty.done < AR.penalty.size) {
+      var keys = arIntroduced().sort(function (a, b) {
+        var x = AR.cards[a], y = AR.cards[b];
+        return (y[2] - x[2]) || (x[0] - y[0]) || (Math.random() - .5);
+      }).slice(0, AR.penalty.size - AR.penalty.done);
+      if (keys.length) {
+        return arSystem('Штрафная зона', 'Вчера задание не выполнено. Пройдите ' + keys.length + ' ' + plural(keys.length, 'карточку', 'карточки', 'карточек') + ' повторения.', 'Войти в зону', function () {
+          arCards(keys.map(function (k) { return { k: k, kind: 'penalty' }; }), 'Штрафная зона');
+        });
+      }
+    }
+    if (AR.due.length) return arCards(AR.due.map(function (k) { return { k: k, kind: 'review' }; }), 'Повторения');
+    var more = AR.nextUnit <= ARC.units.length;
+    if (AR.newAllowed && more && AR.unitsToday < AR.need && !AR.taskDone) return arUnit(ARC.units[AR.nextUnit - 1]);
+    if (AR.taskDone) {
+      return arSystem('Задание выполнено', 'Награда получена. Уровень ' + AR.lvl.level + ', опыт ' + AR.xp + '.' + (arNextScene(arStory()) ? '\nСцена открыта.' : ''), 'Закрыть', arClose, true);
+    }
+    if (!AR.newAllowed) return arSystem('Долг повторений', 'Лимит повторений на сегодня исчерпан, остальные – завтра. Пока долг не разобран, новые слова не даются.', 'Закрыть', arClose);
+    arSystem('Готово', 'Задание дня засчитается, когда будут пройдены все его части.', 'Закрыть', arClose);
+  }
+  function arSystem(title, text, btn, fn, gold) {
+    arBody('<div class="card sys reward"><div class="sys-h">[ Система ]</div><div class="sys-title"' + (gold ? ' style="color:var(--gold)"' : '') + '>' + esc(title) + '</div>' +
+      arParas(text) + '<button class="btn-sys" id="ar-next">' + esc(btn) + '</button></div>');
+    $('ar-next').onclick = fn;
+  }
+
+  /* --- карточки --- */
+  function arWordOf(key) { return ARC.W[key.split(':')[0]]; }
+  // opts.exam – ответы не идут в лесенку и не повторяются, только считаются через opts.onAnswer
+  function arCards(list, title, onDone, opts) {
+    opts = opts || {};
+    list = list.filter(function (it) { return arWordOf(it.k); });
+    var i = 0, again = [], total = list.length;
+    $('ar-ov-title').textContent = title;
+    function next() {
+      if (i >= list.length && again.length) { list = list.concat(again.map(function (it) { return { k: it.k, kind: it.kind, practice: true }; })); again = []; }
+      if (i >= list.length) {
+        if (onDone) return onDone();
+        arBody('<div class="empty" style="text-align:center;padding:40px 0">Сохраняю…</div>');
+        return arFlush().then(arStep).catch(function (e) { toast(e.message, true); arSystem('Нет связи', 'Ответы сохранятся при следующей отправке.', 'Повторить', function () { arFlush().then(arStep).catch(function (e2) { toast(e2.message, true); }); }); });
+      }
+      arProg(Math.min(i, total) / Math.max(1, total));
+      var it = list[i++];
+      (it.k.slice(-1) === 'r' ? arCardR : arCardP)(it, function (ok, ans) {
+        if (opts.exam) { if (opts.onAnswer) opts.onAnswer(ok); }
+        else if (!it.practice) { arQueue.push({ k: it.k, kind: it.kind, ok: ok, a: ans || '' }); if (arQueue.length >= 10) arFlush().catch(function () {}); }
+        if (!ok && !it.practice && !opts.exam) again.push(it);
+        haptic(ok ? 'success' : 'error');
+      }, next);
+    }
+    next();
+  }
+  function arCardR(it, answer, next) {
+    var w = arWordOf(it.k);
+    var pool = shuffle(ARC.words.filter(function (x) { return x.id !== w.id && x.ru !== w.ru && x.bare !== w.bare && (arIntroduced().indexOf(x.id + ':r') >= 0 || x.unit <= AR.nextUnit); })).slice(0, 3);
+    var opts = shuffle(pool.concat([w]));
+    arBody('<div class="label" style="text-align:center">' + (it.practice ? 'Ещё раз' : 'Что значит') + '</div><div class="big-ar ar">' + esc(w.bare) + '</div>' +
+      '<div class="opts">' + opts.map(function (o, j) { return '<button class="opt" data-j="' + j + '">' + esc(o.ru) + '</button>'; }).join('') + '</div><div id="ar-fb"></div>');
+    var done = false;
+    Array.prototype.forEach.call(document.querySelectorAll('#ar-body .opt'), function (b) {
+      b.onclick = function () {
+        if (done) return; done = true;
+        var o = opts[Number(b.getAttribute('data-j'))], ok = o.id === w.id;
+        Array.prototype.forEach.call(document.querySelectorAll('#ar-body .opt'), function (x) {
+          x.disabled = true; var oo = opts[Number(x.getAttribute('data-j'))];
+          if (oo.id === w.id) x.classList.add('right'); else if (x === b) x.classList.add('wrong');
+        });
+        answer(ok, o.ru);
+        arFeedback(ok, w, next);
+      };
+    });
+  }
+  function arCardP(it, answer, next) {
+    var w = arWordOf(it.k);
+    arBody('<div class="label" style="text-align:center">' + (it.practice ? 'Ещё раз' : 'Напишите по-арабски, без огласовок') + '</div>' +
+      '<div class="sys-title" style="text-align:center;margin-top:14px">' + esc(w.ru) + '</div>' + (w.hint ? '<div class="sub-c tip">' + esc(w.hint) + '</div>' : '') +
+      '<input class="ar-input ar" id="ar-in" lang="ar" dir="rtl" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">' +
+      '<button class="btn-sys" id="ar-check">Проверить</button><div id="ar-fb"></div>');
+    var inp = $('ar-in'), done = false;
+    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 50);
+    function check() {
+      if (done) return;
+      var v = arBare(inp.value);
+      if (!v) { shake(inp); return; }
+      done = true; inp.disabled = true; $('ar-check').hidden = true;
+      var ok = [w.bare].concat(w.alt || []).some(function (x) { return arBare(x) === v; });
+      answer(ok, v);
+      arFeedback(ok, w, next, v);
+    }
+    $('ar-check').onclick = check;
+    inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); check(); } });
+  }
+  function arFeedback(ok, w, next, typed) {
+    $('ar-fb').innerHTML = '<div class="fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'Верно. ' : (typed ? 'Ошибка. Вы написали <span class="ar">' + esc(typed) + '</span>. ' : 'Ошибка. ')) +
+      '<span class="ar">' + esc(w.ar) + '</span> – ' + esc(w.ru) + (w.note ? '<div class="tip" style="margin-top:4px">' + arMark(w.note) + '</div>' : '') + '</div>' +
+      '<button class="btn-sys" id="ar-next">Дальше</button>';
+    $('ar-next').onclick = next;
+    try { $('ar-next').scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  }
+
+  /* --- урок: слова, правило, упражнения --- */
+  function arUnit(u) {
+    $('ar-ov-title').textContent = 'Урок ' + u.n;
+    var words = u.words.map(function (id) { return ARC.W[id]; }).filter(Boolean);
+    var i = 0;
+    function intro() {
+      if (i >= words.length) return quiz();
+      arProg(i / (words.length * 3 + 6));
+      var w = words[i++];
+      arBody('<div class="label" style="text-align:center">Новое слово ' + i + ' из ' + words.length + '</div>' +
+        '<div class="big-ar ar">' + esc(w.ar) + '</div><div class="sub-c mid-ar ar">' + esc(w.bare) + '</div>' +
+        '<div class="sys-title" style="text-align:center">' + esc(w.ru) + '</div>' + (w.note ? '<div class="card" style="background:var(--sunk)">' + arParas(w.note) + '</div>' : '') +
+        '<button class="btn-sys" id="ar-next">Дальше</button>');
+      $('ar-next').onclick = intro;
+    }
+    function quiz() {
+      var list = [];
+      words.forEach(function (w) { list.push({ k: w.id + ':r', kind: 'new' }); });
+      shuffle(words).forEach(function (w) { list.push({ k: w.id + ':p', kind: 'new' }); });
+      arCards(list, 'Урок ' + u.n + ' – закрепление', rule);
+    }
+    function rule() { arFlush().catch(function () {}); arRule(u, finish); }
+    function finish(right, total) {
+      arBody('<div class="empty" style="text-align:center;padding:40px 0">Сохраняю…</div>');
+      var p = u.part ? ARC.P[u.part] : null;
+      arFlush().then(function () {
+        return arCall('arUnit', { n: u.n, rule: p ? p.rule : 'review', part: u.part || 'review', right: right, total: total });
+      }).then(function () {
+        arSystem('Урок ' + u.n + ' пройден', 'Упражнения: ' + right + ' из ' + total + '.\n+' + (10 + right * 2) + ' опыта.', 'Дальше', arStep);
+      }).catch(function (e) { toast(e.message, true); arSystem('Не сохранилось', e.message, 'Повторить', function () { finish(right, total); }); });
+    }
+    if (!words.length) rule(); else intro();
+  }
+  function arRule(u, done) {
+    var exs, head;
+    if (u.part) {
+      var p = ARC.P[u.part];
+      head = '<div class="label">' + esc(ARC.R[p.rule].title) + '</div><h2 class="sys-title">' + esc(p.title) + '</h2>';
+      exs = p.ex.slice();
+      arBody('<div class="card rule">' + head + arParas(p.explain) + '</div><button class="btn-sys" id="ar-next">К упражнениям</button>');
+    } else {
+      var parts = [];
+      (u.review || []).forEach(function (rid) { (ARC.R[rid] ? ARC.R[rid].parts : []).forEach(function (pp) { parts.push(pp); }); });
+      exs = [];
+      parts.forEach(function (pp) { pp.ex.forEach(function (e) { exs.push(e); }); });
+      exs = shuffle(exs).slice(0, 6);
+      arBody('<div class="card rule"><div class="label">Повторение</div><h2 class="sys-title">Правила недели</h2><p>' +
+        parts.map(function (pp) { return esc(ARC.R[pp.rule].title + ': ' + pp.title); }).join('<br>') + '</p></div><button class="btn-sys" id="ar-next">К упражнениям</button>');
+    }
+    $('ar-next').onclick = function () { arExercises(exs, 'Упражнения', done); };
+  }
+  function arExercises(exs, title, done) {
+    var i = 0, right = 0;
+    $('ar-ov-title').textContent = title;
+    function next() {
+      if (i >= exs.length) return done(right, exs.length);
+      arProg(i / exs.length);
+      var e = exs[i++];
+      arExercise(e, i, exs.length, function (ok) { if (ok) right++; haptic(ok ? 'success' : 'error'); }, next);
+    }
+    next();
+  }
+  function arExercise(e, i, n, answer, next) {
+    var head = '<div class="label">Задание ' + i + ' из ' + n + '</div><div class="rule" style="margin-top:8px">' + arParas(e.q) + '</div>';
+    function fb(ok, extra) {
+      $('ar-fb').innerHTML = '<div class="fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'Верно.' : 'Ошибка.') + (extra || '') + (e.why ? '<div style="margin-top:4px">' + arMark(e.why) + '</div>' : '') + '</div><button class="btn-sys" id="ar-next">Дальше</button>';
+      $('ar-next').onclick = next;
+      try { $('ar-next').scrollIntoView({ block: 'nearest' }); } catch (x) {}
+    }
+    if (e.t === 'type') {
+      arBody(head + '<input class="ar-input ar" id="ar-in" lang="ar" dir="rtl" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><button class="btn-sys" id="ar-check">Проверить</button><div id="ar-fb"></div>');
+      var inp = $('ar-in'), done = false;
+      setTimeout(function () { try { inp.focus(); } catch (x) {} }, 50);
+      var check = function () {
+        if (done) return;
+        var v = arBare(inp.value); if (!v) { shake(inp); return; }
+        done = true; inp.disabled = true; $('ar-check').hidden = true;
+        var ok = [].concat(e.a).some(function (x) { return arBare(x) === v; });
+        answer(ok); fb(ok, ok ? '' : ' Правильно: <span class="ar">' + esc([].concat(e.a)[0]) + '</span>');
+      };
+      $('ar-check').onclick = check;
+      inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); check(); } });
+      return;
+    }
+    var order = shuffle(e.opts.map(function (_, j) { return j; }));
+    arBody(head + '<div class="opts">' + order.map(function (j) { return '<button class="opt" data-j="' + j + '">' + arMark(e.opts[j]) + '</button>'; }).join('') + '</div><div id="ar-fb"></div>');
+    var answered = false;
+    Array.prototype.forEach.call(document.querySelectorAll('#ar-body .opt'), function (b) {
+      b.onclick = function () {
+        if (answered) return; answered = true;
+        var j = Number(b.getAttribute('data-j')), ok = j === e.a;
+        Array.prototype.forEach.call(document.querySelectorAll('#ar-body .opt'), function (x) {
+          x.disabled = true; var jj = Number(x.getAttribute('data-j'));
+          if (jj === e.a) x.classList.add('right'); else if (x === b) x.classList.add('wrong');
+        });
+        answer(ok); fb(ok);
+      };
+    });
+  }
+
+  /* --- сцена --- */
+  function arSceneText(items, st, ep) {
+    return (items || []).map(function (b) {
+      if (typeof b === 'string') return arParas(b);
+      if (b.if && !arIf(b.if, st, ep)) return '';
+      if (b.read) {
+        return '<div class="read"><span class="ar">' + esc(b.read.ar) + '</span><button data-ru="' + esc(b.read.ru) + '">Показать перевод</button></div>';
+      }
+      if (b.say) return '<div class="say">' + arParas(b.say) + '</div>';
+      return arParas(b.text);
+    }).join('');
+  }
+  function arBindReads() {
+    Array.prototype.forEach.call(document.querySelectorAll('#ar-body .read button'), function (b) {
+      b.onclick = function () { var d = document.createElement('div'); d.className = 'tip'; d.style.marginTop = '6px'; d.textContent = b.getAttribute('data-ru'); b.replaceWith(d); };
+    });
+  }
+  function arScene(id) {
+    var sc = ARC.scenes[id], st = arStory();
+    var ep = ARC.E[sc.ep];
+    arOpen('Серия ' + ep.n + '. ' + ep.title);
+    arProg(0);
+    var cold = st.coldPending[sc.ep] && ep.cold ? '<div class="fb bad" style="margin:0 0 12px">' + arMark(ep.cold.text) + '</div>' : '';
+    var html = '<div class="scene">' + (sc.title ? '<div class="label">' + esc(sc.title) + '</div>' : '') + '<div style="margin-top:8px">' + cold + arSceneText(sc.text, st, sc.ep) + '</div>';
+    var chs = (sc.choices || []).filter(function (c) { return arIf(c.if, st, sc.ep); });
+    html += '<div id="ar-choices">' + chs.map(function (c) {
+      var sub = '';
+      if (c.check) sub = 'Проверка: сложность ' + c.check.dc + (c.check.skill && ARC.R[c.check.skill] ? ', навык «' + ARC.R[c.check.skill].title + '»' : '') + ', ваш модификатор +' + AR.mod;
+      return '<button class="choice" data-id="' + esc(c.id) + '">' + arMark(c.text) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</button>';
+    }).join('') + '</div><div id="ar-out"></div></div>';
+    arBody(html);
+    arBindReads();
+    var picked = false;
+    Array.prototype.forEach.call(document.querySelectorAll('#ar-choices .choice'), function (b) {
+      b.onclick = function () {
+        if (picked) return; picked = true;
+        var c = chs.filter(function (x) { return x.id === b.getAttribute('data-id'); })[0];
+        Array.prototype.forEach.call(document.querySelectorAll('#ar-choices .choice'), function (x) { x.disabled = true; if (x !== b) x.style.opacity = '.4'; });
+        $('ar-out').innerHTML = '<div class="empty" style="text-align:center;padding:16px 0">' + (c.check ? 'Бросок…' : '…') + '</div>';
+        var skill = c.check && c.check.skill;
+        arCall('arRoll', { scene: id, choice: c.id, dc: c.check ? c.check.dc : 0, skill: skill || '', parts: skill && ARC.R[skill] ? ARC.R[skill].parts.length : 0 })
+          .then(function (data) { arOutcome(sc, c, data.roll); })
+          .catch(function (e) { picked = false; toast(e.message, true); $('ar-out').innerHTML = ''; Array.prototype.forEach.call(document.querySelectorAll('#ar-choices .choice'), function (x) { x.disabled = false; x.style.opacity = ''; }); });
+      };
+    });
+  }
+  function arOutcome(sc, c, r) {
+    if (r && r.repeat && r.choice !== c.id) c = (sc.choices || []).filter(function (x) { return x.id === r.choice; })[0] || c;
+    var out = c.check ? (r.ok ? c.ok : c.fail) : c.then;
+    var st = arStory();
+    var html = '';
+    if (c.check) {
+      html += '<div class="die"><b class="num" id="ar-die">?</b><span class="num">+ ' + r.mod + ' = ' + (r.roll + r.mod) + ' против ' + r.dc + '<br><span class="' + (r.ok ? 'res-ok' : 'res-bad') + '">' + (r.ok ? (r.roll === 20 ? 'Чистая двадцатка!' : 'Успех') : 'Провал') + '</span></span></div>';
+    }
+    html += arSceneText(out ? out.text : [], st, sc.ep) + arSceneText(sc.after, st, sc.ep);
+    html += '<button class="btn-sys" id="ar-done">Закрыть</button>';
+    $('ar-out').innerHTML = html;
+    arBindReads();
+    haptic(c.check ? (r.ok ? 'success' : 'warning') : 'tap');
+    if (c.check) {
+      var die = $('ar-die'), k = 0;
+      var t = setInterval(function () { die.textContent = 1 + Math.floor(Math.random() * 20); if (++k > 9) { clearInterval(t); die.textContent = r.roll; } }, 60);
+    }
+    $('ar-done').onclick = arClose;
+  }
+
+  /* --- экзамен на ранг --- */
+  function arExam() {
+    var keys = shuffle(arIntroduced());
+    var items = keys.slice(0, 20).map(function (k) { return { word: k }; });
+    var passed = {};
+    AR.units.forEach(function (u) { if (u[3] && ARC.P[u[3]]) passed[u[3]] = true; });
+    var exs = [];
+    Object.keys(passed).forEach(function (pid) { ARC.P[pid].ex.forEach(function (e) { exs.push(e); }); });
+    exs = shuffle(exs).slice(0, 30 - items.length);
+    if (items.length + exs.length < 20) { toast('Для экзамена пока мало пройденного', true); return; }
+    arOpen('Экзамен на ранг');
+    var right = 0, total = items.length + exs.length;
+    arCards(items.map(function (x) { return { k: x.word, kind: 'exam' }; }), 'Экзамен: слова', function () {
+      arExercises(exs, 'Экзамен: правила', function (r2) {
+        right += r2;
+        arBody('<div class="empty" style="text-align:center;padding:40px 0">Система оценивает…</div>');
+        var before = AR.rank;
+        arCall('arExam', { right: right, total: total }).then(function () {
+          var up = AR.rank !== before;
+          arSystem(up ? 'Новый ранг: ' + AR.rank : 'Ранг ' + AR.rank + ' подтверждён', 'Результат: ' + right + ' из ' + total + ' (' + Math.round(right / total * 100) + '%).' + (up ? '' : '\nДля повышения нужно 80%. Следующая переоценка – в следующем месяце.'), 'Закрыть', arClose, up);
+        }).catch(function (e) { toast(e.message, true); arClose(); });
+      });
+    }, { exam: true, onAnswer: function (ok) { if (ok) right++; } });
+  }
+
+  /* --- демо: та же логика, что в Code.gs (arState_, arNextCard_), состояние в памяти --- */
+  var arDemo = (function () {
+    var IVL = [1, 3, 7, 14, 30, 60], CAP = 40;
+    var D = { cards: {}, days: {}, units: [], story: [], exams: [] };
+    function day(t) { return D.days[t] || (D.days[t] = { reviews: 0, fresh: 0, units: 0, penalty: 0, done: false, xp: 0 }); }
+    function known() {
+      var by = {};
+      Object.keys(D.cards).forEach(function (k) { var p = k.split(':'); (by[p[0]] = by[p[0]] || {})[p[1]] = D.cards[k].step; });
+      return Object.keys(by).filter(function (w) { return by[w].r >= 2 && by[w].p >= 2; }).length;
+    }
+    function state() {
+      var t = localToday(), dw = dow(t), d = day(t);
+      var dueAll = Object.keys(D.cards).filter(function (k) { return D.cards[k].due <= t; }).sort(function (a, b) { return D.cards[a].due < D.cards[b].due ? -1 : 1; });
+      var left = Math.max(0, CAP - d.reviews);
+      var got = {}; D.units.forEach(function (u) { if (!got[u[0]]) got[u[0]] = u[1]; });
+      var n = 1; while (got[n]) n++;
+      var xp = 0; Object.keys(D.days).forEach(function (k) { xp += D.days[k].xp; });
+      var lv = Math.floor(Math.sqrt(xp / 25)) + 1;
+      var cards = {}; Object.keys(D.cards).forEach(function (k) { var c = D.cards[k]; cards[k] = [c.step, c.due, c.lapses]; });
+      var kn = known();
+      return {
+        today: t, dow: dw, weekend: dw >= 5, need: dw >= 5 ? 2 : 1, cap: CAP, reviewsToday: d.reviews, freshToday: d.fresh,
+        due: dueAll.slice(0, left), dueTotal: dueAll.length, newAllowed: dueAll.length <= left,
+        penalty: { need: false, done: d.penalty, size: 10 }, gap: 0, nextUnit: n,
+        unitsToday: Object.keys(got).filter(function (k) { return got[k] === t; }).length,
+        units: D.units.slice(), story: D.story.slice(), cards: cards, known: kn, mod: Math.floor(kn / 25),
+        xp: xp, lvl: { level: lv, from: 25 * (lv - 1) * (lv - 1), to: 25 * lv * lv },
+        rank: D.exams.length ? D.exams[D.exams.length - 1].after : 'E', streak: d.done ? 1 : 0, taskDone: d.done,
+        exam: { available: dw >= 5 && n - 1 >= 12 && !D.exams.length, thisMonth: !!D.exams.length, list: D.exams }
+      };
+    }
+    function complete(s, cu) {
+      var reviewsOk = s.dueTotal === 0 || s.reviewsToday >= s.cap;
+      var unitsOk = s.unitsToday >= s.need || !s.newAllowed || s.nextUnit > (cu || 0);
+      return reviewsOk && unitsOk;
+    }
+    function call(action, p) {
+      var t = localToday(), d = day(t), roll = null;
+      if (action === 'arAnswers') (p.items || []).forEach(function (it) {
+        var c = D.cards[it.k];
+        if (it.kind === 'new') { if (!c) { D.cards[it.k] = { step: 0, due: addDays(t, 1), lapses: 0 }; if (/:r$/.test(it.k)) { d.fresh++; d.xp += 3; } } return; }
+        if (!c || c.due > t) return;
+        d.reviews++;
+        if (it.ok) { c.step = Math.min(c.step + 1, 5); c.due = addDays(t, IVL[c.step]); d.xp += 2; } else { c.step = 0; c.due = addDays(t, 1); c.lapses++; }
+      });
+      if (action === 'arUnit' && !D.units.some(function (u) { return u[0] === p.n; })) { D.units.push([p.n, t, p.rule, p.part, p.right, p.total]); d.units++; d.xp += 10 + 2 * p.right; }
+      if (action === 'arRoll') {
+        var prev = D.story.filter(function (s) { return s[1] === p.scene; })[0];
+        if (prev) roll = { scene: p.scene, choice: prev[2], roll: prev[3], mod: prev[4], dc: prev[5], ok: prev[6], repeat: true };
+        else {
+          var r = p.dc ? 1 + Math.floor(Math.random() * 20) : null, mod = Math.floor(known() / 25);
+          var ok = !p.dc || r === 20 || r + mod >= p.dc;
+          D.story.push([t, p.scene, p.choice, r, mod, p.dc || 0, ok]);
+          roll = { scene: p.scene, choice: p.choice, roll: r, mod: mod, dc: p.dc, ok: ok, repeat: false };
+        }
+      }
+      if (action === 'arExam') { var before = state().rank, R = ['E', 'D', 'C', 'B', 'A', 'S']; D.exams.push({ date: t, right: p.right, total: p.total, before: before, after: p.right / p.total >= .8 ? R[Math.min(R.indexOf(before) + 1, 5)] : before }); }
+      if (action !== 'arState' && action !== 'arRoll' && !d.done && complete(state(), p.contentUnits)) { d.done = true; d.xp += 20; }
+      var s = state(); if (roll) s.roll = roll;
+      return new Promise(function (res) { setTimeout(function () { res(JSON.parse(JSON.stringify(s))); }, 200); });
+    }
+    return { call: call };
+  })();
+
   /* ---------- вкладки, уведомления ---------- */
-  var VIEWS = { add: ['view-add', 'tab-add'], summary: ['view-sum', 'tab-sum'] };
+  var VIEWS = { add: ['view-add', 'tab-add'], summary: ['view-sum', 'tab-sum'], arabic: ['view-ar', 'tab-ar'] };
   function show(view) {
     if (!VIEWS[view]) view = 'add';
     Object.keys(VIEWS).forEach(function (k) {
@@ -1031,6 +1712,7 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
       $(VIEWS[k][1]).classList.toggle('on', k === view);
     });
     if (view === 'summary' && S) { selDay = S.dayIndex; monthIdx = 0; renderWeek(); renderMonth(false); }
+    if (view === 'arabic') { if (AR && ARC) arRender(); else arLoad(); }
     window.scrollTo(0, 0);
   }
   var toastTimer;
@@ -1120,6 +1802,9 @@ main{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-i
     bindHabits();
     $('tab-add').addEventListener('click', function () { show('add'); });
     $('tab-sum').addEventListener('click', function () { show('summary'); });
+    $('tab-ar').addEventListener('click', function () { show('arabic'); });
+    $('ar-x').addEventListener('click', arClose);
+    document.addEventListener('visibilitychange', function () { if (document.hidden) arFlush().catch(function () {}); });
 
     if (DEMO) { $('demo').hidden = false; S = demoState(); render(); show(qs.get('view')); return; }
     show(qs.get('view'));
